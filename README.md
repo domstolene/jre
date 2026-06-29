@@ -6,6 +6,8 @@ Bruk dette imaget som base image i applikasjonen din og legg jar-filen under /ap
 
 ```dockerfile
 FROM ghcr.io/domstolene/jre
+# eller Azul-variant:
+# FROM ghcr.io/domstolene/jre:azul
 
 # konfigurasjon i k8s-applications mountes til /deployments/config
 WORKDIR /deployments

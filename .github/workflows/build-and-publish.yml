@@ -70,6 +70,17 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           platforms: linux/amd64,linux/arm64/v8
 
+      # Azul-variant of same image
+      - name: Build and push Docker image
+        id: build-and-push-azul
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.azul
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:azul
+          platforms: linux/amd64,linux/arm64/v8
+
       # Sign the resulting Docker image digest except on PRs.
       # This will only write to the public Rekor transparency log when the Docker
       # repository is public to avoid leaking data.  If you would like to publish
@@ -82,4 +93,10 @@ jobs:
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
         # This step uses the identity token to provision an ephemeral certificate
         # against the sigstore community Fulcio instance.
+        run: cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ env.DIGEST }}
+
+      - name: Sign the published azul Docker image
+        if: ${{ github.event_name != 'pull_request' }}
+        env:
+          DIGEST: ${{ steps.build-and-push-azul.outputs.digest }}
         run: cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ env.DIGEST }}
