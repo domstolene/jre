@@ -71,7 +71,7 @@ jobs:
           platforms: linux/amd64,linux/arm64/v8
 
       # Azul-variant of same image
-      - name: Build and push Docker image
+      - name: Build and push azul Docker image
         id: build-and-push-azul
         uses: docker/build-push-action@v7
         with:
