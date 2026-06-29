@@ -1,0 +1,14 @@
+# Standard konfigurasjon for sporing.
+# Skrus på med OTEL_TRACES_SAMPLER=dynamic, og vil da
+# spore 1 % av alle forespørsler, pluss de som forelder
+# spør om sporing for.
+sampler: parentbased_traceidratio
+sampleRatio: 0.01
+rules:
+  - exclude:
+      - url.path: "/ready"
+      - url.path: "/metrics"
+      - url.path: "/actuator/health"
+      - url.path: "/v1/swagger-ui.html"
+      - url.path: "/v1/swagger-ui/index.html"
+      - url.path: "/actuator/prometheus"
