@@ -30,9 +30,10 @@ FROM ghcr.io/domstolene/jre:chiseled
 # navn på tjenesten i sporingsoppsettet
 ENV OTEL_SERVICE_NAME=ip-varsling-status
 
-ADD --chmod=644 --chown=0:1000 build/libs/*.jar /app/application.jar
+ADD --chmod=644 --chown=0:1000 build/libs/*.jar application.jar
 ```
 
+OBS: Ikke bruk `WORKDIR`, det er satt til `/app` og application.jar havner da i `/app/application.jar`.
 PS: Tross dette vil Spring Boot lete etter konfigurasjon i `/config`, `/app/config` og `/deployments/config`. Se [Dockerfile.chiseled](Dockerfile.chiseled) for detaljer.
 
 ## Sikkerhetsvarsler

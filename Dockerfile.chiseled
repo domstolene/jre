@@ -9,7 +9,6 @@ ARG DA_OTEL_AGENT_VERSION=1.7.9
 
 ### UNNGÅ PROBLEMER MED RETTIGHETER PÅ OPENSHIFT ###
 WORKDIR /app
-USER 1000:1000
 
 
 ### SPORING ###
@@ -41,7 +40,8 @@ ENV OTEL_LOGS_EXPORTER=none
 ENV OTEL_TRACES_SAMPLER=always_off
 
 
-### OPPSTART DIREKTE VIA JAVA ###
+### OPPSTART DIREKTE VIA JAVA MED UPRIVILIGERT BRUKER ###
+USER 1000:1000
 ENTRYPOINT ["java"]
 CMD ["-javaagent:/da-otel-agent/da-otel-agent.jar", \
     "-Dotel.configuration.service.file=/da-otel-agent/da-otel-agent.yaml", \
