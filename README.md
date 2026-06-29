@@ -9,16 +9,31 @@ FROM ghcr.io/domstolene/jre
 # eller Azul-variant:
 # FROM ghcr.io/domstolene/jre:azul
 
-# konfigurasjon i k8s-applications mountes til /deployments/config
-WORKDIR /deployments
-
-ADD --chmod=644 build/libs/*.jar ip-varsling-status.jar
-
 # navn på tjenesten i sporingsoppsettet
 ENV OTEL_SERVICE_NAME=ip-varsling-status
+
+# konfigurasjon i k8s-applications mountes til /deployments/config
+WORKDIR /deployments
+ADD --chmod=644 build/libs/*.jar ip-varsling-status.jar
 ```
 
 Se [Dockerfile](Dockerfile) for detaljene.
+
+### Minimalt image
+Chiseled er et verktøy som stripper Ubuntu helt ned, slik at en kun har [pebble](https://documentation.ubuntu.com/rockcraft/latest/explanation/pebble/) som oppstart og ikke noe annet. Ingen pakker, ingen shell, ingenting annet enn det som trengs.
+
+Siden det ikke har noe shell og oppstarten dermed ikke kan dynamisk finne jar-filen, **må** navnet på applikasjonens jar være `/application.jar`:
+
+```Dockerfile
+FROM ghcr.io/domstolene/jre:chiseled
+
+# navn på tjenesten i sporingsoppsettet
+ENV OTEL_SERVICE_NAME=ip-varsling-status
+
+ADD --chmod=644 build/libs/*.jar /application.jar
+```
+
+PS: Tross dette vil Spring Boot lete etter konfigurasjon i `/config`, `/app/config` og `/deployments/config`. Se [Dockerfile.chiseled](Dockerfile.chiseled) for detaljer.
 
 ## Sikkerhetsvarsler
 Scanne med Red Hat Advanced Cluster Security (når tilganger er på plass):
