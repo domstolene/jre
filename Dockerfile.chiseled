@@ -7,10 +7,6 @@ FROM docker.io/ubuntu/jre:25-26.04_edge
 ARG DA_OTEL_AGENT_VERSION=1.7.9
 
 
-### UNNGÅ PROBLEMER MED RETTIGHETER PÅ OPENSHIFT ###
-WORKDIR /app
-
-
 ### SPORING ###
 # da-otel-agent gir oss sporing der en kan skru av/på sporingen på
 # https://otelconfig.apps.ocp.test.domstol.no uten å omstarte tjenesten
@@ -27,6 +23,7 @@ WORKDIR /app
 #      -e OTEL_TRACES_EXPORTER=otlp \
 #      -e OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
 #      <docker-image> # for eksempel ghcr.io/domstolene/ip-ap-api:latest
+WORKDIR /da-otel-agent  # for å opprette mappen med 755-rettigheter, kan ikke bruke mkdir da vi ikke har shell i dette imaget
 ADD --chmod=644 --chown=0:1000 https://github.com/domstolene/da-otel-agent/releases/download/${DA_OTEL_AGENT_VERSION}/da-opentelemetry-javaagent.jar /da-otel-agent/da-otel-agent.jar
 ADD --chmod=644 --chown=0:1000 src/da-otel-agent/da-otel-agent.yaml /da-otel-agent/da-otel-agent.yaml
 
@@ -41,6 +38,7 @@ ENV OTEL_TRACES_SAMPLER=always_off
 
 
 ### OPPSTART DIREKTE VIA JAVA MED UPRIVILIGERT BRUKER ###
+WORKDIR /app
 USER 1000:1000
 ENTRYPOINT ["java"]
 CMD ["-javaagent:/da-otel-agent/da-otel-agent.jar", \
