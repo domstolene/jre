@@ -22,7 +22,7 @@ Se [Dockerfile](Dockerfile) for detaljene.
 ### Minimalt image
 Chiseled er et verktøy som stripper Ubuntu helt ned, slik at en kun har [pebble](https://documentation.ubuntu.com/rockcraft/latest/explanation/pebble/) som oppstart og ikke noe annet. Ingen pakker, ingen shell, ingenting annet enn det som trengs.
 
-Siden det ikke har noe shell og oppstarten dermed ikke kan dynamisk finne jar-filen, **må** navnet på applikasjonens jar være `/application.jar`:
+Siden det ikke har noe shell og oppstarten dermed ikke kan dynamisk finne jar-filen, **må** navnet på applikasjonens jar være `/app/application.jar`:
 
 ```Dockerfile
 FROM ghcr.io/domstolene/jre:chiseled
@@ -30,7 +30,7 @@ FROM ghcr.io/domstolene/jre:chiseled
 # navn på tjenesten i sporingsoppsettet
 ENV OTEL_SERVICE_NAME=ip-varsling-status
 
-ADD --chmod=644 build/libs/*.jar /application.jar
+ADD --chmod=644 --chown=0:1000 build/libs/*.jar /app/application.jar
 ```
 
 PS: Tross dette vil Spring Boot lete etter konfigurasjon i `/config`, `/app/config` og `/deployments/config`. Se [Dockerfile.chiseled](Dockerfile.chiseled) for detaljer.
