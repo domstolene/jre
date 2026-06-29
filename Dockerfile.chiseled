@@ -23,9 +23,11 @@ ARG DA_OTEL_AGENT_VERSION=1.7.9
 #      -e OTEL_TRACES_EXPORTER=otlp \
 #      -e OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
 #      <docker-image> # for eksempel ghcr.io/domstolene/ip-ap-api:latest
-WORKDIR /da-otel-agent  # for å opprette mappen med 755-rettigheter, kan ikke bruke mkdir da vi ikke har shell i dette imaget
-ADD --chmod=644 --chown=0:1000 https://github.com/domstolene/da-otel-agent/releases/download/${DA_OTEL_AGENT_VERSION}/da-opentelemetry-javaagent.jar /da-otel-agent/da-otel-agent.jar
-ADD --chmod=644 --chown=0:1000 src/da-otel-agent/da-otel-agent.yaml /da-otel-agent/da-otel-agent.yaml
+#
+# for å opprette mappen med 755-rettigheter, kan ikke bruke mkdir da vi ikke har shell i dette imaget
+WORKDIR /da-otel-agent
+ADD --chmod=644 --chown=0:1000 https://github.com/domstolene/da-otel-agent/releases/download/${DA_OTEL_AGENT_VERSION}/da-opentelemetry-javaagent.jar da-otel-agent.jar
+ADD --chmod=644 --chown=0:1000 src/da-otel-agent/da-otel-agent.yaml da-otel-agent.yaml
 
 # skru av sending av metrikker og logger, som ikke støttes i vårt OpenTelemetry-oppsett per nå
 ENV OTEL_METRICS_EXPORTER=none

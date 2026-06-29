@@ -19,6 +19,18 @@ ADD --chmod=644 build/libs/*.jar ip-varsling-status.jar
 
 Se [Dockerfile](Dockerfile) for detaljene.
 
+I pipeline, sørg for å alltid hente siste versjon av base image med `pull: true`:
+
+```yaml
+- name: Build latest docker image
+  uses: docker/build-push-action@v7
+  with:
+    context: .
+    pull: true # hent alltid base image
+    push: true
+    tags:
+```
+
 ### Minimalt image
 Chiseled er et verktøy som stripper Ubuntu helt ned, slik at en kun har [pebble](https://documentation.ubuntu.com/rockcraft/latest/explanation/pebble/) som oppstart og ikke noe annet. Ingen pakker, ingen shell, ingenting annet enn det som trengs.
 
