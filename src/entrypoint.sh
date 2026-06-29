@@ -8,7 +8,7 @@ if [[ -z "${APP_JAR}" ]]; then
   app_folders=(/app /deployments)
   for folder in "${app_folders[@]}"; do
     if [[ -d "${folder}" ]]; then
-      if APP_JAR=$(find "${folder}" -name "*.jar" | head -n 1); then
+      if APP_JAR=$(find "${folder}" -name "*.jar" | head -n 1) && [[ ! -z "${APP_JAR}" ]]; then
         echo "Found application jar file: ${APP_JAR}"
         break
       fi
