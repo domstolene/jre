@@ -1,15 +1,29 @@
-FROM docker.io/eclipse-temurin:25-jre
+### FJERNE VERKTØY ###
+# Fjern utviklerverktøy fra chiseled JRE, vi trenger kun java som entrypoint, ikke noe annet
+FROM eclipse-temurin:25-jdk-alpine AS compiler
+
+WORKDIR /build
+ADD src/RemoveTools.java RemoveTools.java
+
+RUN javac RemoveTools.java
+
+
+### BYGGE IMAGE ###
+# Minimalistisk Ubuntu med kun java (når vi har kjørt RemoveTools)
+FROM docker.io/ubuntu/jre:25-26.04_edge AS chiseled
+
+
+### FJERNE VERKTØY ###
+# Hent RemoveTools.class fra compiler stage
+COPY --from=compiler /build/RemoveTools.class /app/RemoveTools.class
+
+# Kjør RemoveTools for å fjerne VERKTØY fra chiseled JRE
+RUN ["java", "-cp", "/app", "RemoveTools"]
 
 
 ### ARGUMENTER ###
 # siste versjon: gh release view --repo domstolene/da-otel-agent --json tagName --jq .tagName
 ARG DA_OTEL_AGENT_VERSION=1.7.9
-
-
-### OPPDATERTE PAKKER ###
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* \
-    && mkdir /app /deployments \
-    && chown ubuntu:ubuntu /app /deployments
 
 
 ### SPORING ###
@@ -28,7 +42,11 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* \
 #      -e OTEL_TRACES_EXPORTER=otlp \
 #      -e OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
 #      <docker-image> # for eksempel ghcr.io/domstolene/ip-ap-api:latest
-ADD --chmod=644 https://github.com/domstolene/da-otel-agent/releases/download/${DA_OTEL_AGENT_VERSION}/da-opentelemetry-javaagent.jar /da-otel-agent/da-otel-agent.jar
+#
+# for å opprette mappen med 755-rettigheter, kan ikke bruke mkdir da vi ikke har shell i dette imaget
+WORKDIR /da-otel-agent
+ADD --chmod=644 --chown=0:1000 https://github.com/domstolene/da-otel-agent/releases/download/${DA_OTEL_AGENT_VERSION}/da-opentelemetry-javaagent.jar da-otel-agent.jar
+ADD --chmod=644 --chown=0:1000 src/da-otel-agent/da-otel-agent.yaml da-otel-agent.yaml
 
 # skru av sending av metrikker og logger, som ikke støttes i vårt OpenTelemetry-oppsett per nå
 ENV OTEL_METRICS_EXPORTER=none
@@ -40,13 +58,16 @@ ENV OTEL_LOGS_EXPORTER=none
 ENV OTEL_TRACES_SAMPLER=always_off
 
 
-### ENTRYPOINT OG KONFIGURASJON AV SPORING ###
-COPY src /
+### OPPSTART DIREKTE VIA JAVA MED UPRIVILIGERT BRUKER ###
+WORKDIR /app
+USER 1000:1000
+ENV SPRING_CONFIG_ADDITIONAL_LOCATION="optional:file:/config/,optional:file:/app/config/,optional:file:/deployments/config/"
 
-
-### KJØR SOM BRUKER, IKKE ROOT ###
-USER ubuntu
-
-
-### OPPSTART SOM FINNER .jar-FIL OG STØTTER JAVA_OPTS ###
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["java"]
+CMD ["-javaagent:/da-otel-agent/da-otel-agent.jar", \
+    "-Dotel.configuration.service.file=/da-otel-agent/da-otel-agent.yaml", \
+    "-XX:InitialRAMPercentage=75.0", \
+    "-XX:MaxRAMPercentage=75.0", \
+    "-jar", \
+    "/app/application.jar" \
+]

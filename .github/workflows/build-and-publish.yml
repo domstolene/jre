@@ -67,29 +67,7 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          platforms: linux/amd64,linux/arm64/v8
-
-      # Azul-variant of same image
-      - name: Build and push azul Docker image
-        id: build-and-push-azul
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile.azul
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:azul
-          platforms: linux/amd64,linux/arm64/v8
-
-      # Chiseled-variant
-      - name: Build and push chiseled Docker image
-        id: build-and-push-chiseled
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile.chiseled
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:chiseled
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:chiseled
           platforms: linux/amd64,linux/arm64/v8
 
       # Sign the resulting Docker image digest except on PRs.
@@ -104,16 +82,4 @@ jobs:
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
         # This step uses the identity token to provision an ephemeral certificate
         # against the sigstore community Fulcio instance.
-        run: cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ env.DIGEST }}
-
-      - name: Sign the published azul Docker image
-        if: ${{ github.event_name != 'pull_request' }}
-        env:
-          DIGEST: ${{ steps.build-and-push-azul.outputs.digest }}
-        run: cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ env.DIGEST }}
-
-      - name: Sign the published chiseled Docker image
-        if: ${{ github.event_name != 'pull_request' }}
-        env:
-          DIGEST: ${{ steps.build-and-push-chiseled.outputs.digest }}
         run: cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ env.DIGEST }}

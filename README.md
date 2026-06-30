@@ -1,23 +1,22 @@
 # JRE
-Et base image for Java-applikasjoner i domstolene optimalisert for applikasjoner som skal kjøre i vår plattform, men minst mulig sikkerhetssårbarheter.
+Et base image for Java-applikasjoner i domstolene optimalisert for applikasjoner som skal kjøre i vår plattform, men minst mulig sikkerhetssårbarheter og mest mulig ferdigkonfigurert for deg.
 
 ## Bruk
-Bruk dette imaget som base image i applikasjonen din og legg jar-filen under /app eller /deployments:
+Bruk dette imaget som base image i applikasjonen din og legg jar-filen under `/app/application.jar`:
 
 ```dockerfile
-FROM ghcr.io/domstolene/jre
-# eller Azul-variant:
-# FROM ghcr.io/domstolene/jre:azul
+FROM ghcr.io/domstolene/jre:chiseled
 
 # navn på tjenesten i sporingsoppsettet
 ENV OTEL_SERVICE_NAME=ip-varsling-status
 
-# konfigurasjon i k8s-applications mountes til /deployments/config
-WORKDIR /deployments
-ADD --chmod=644 build/libs/*.jar ip-varsling-status.jar
+# WORKDIR er /app, slik at den havner i /app/application.jar
+ADD --chmod=644 --chown=0:1000 build/libs/*.jar application.jar
 ```
 
-Se [Dockerfile](Dockerfile) for detaljene.
+OBS: Ikke overstyr `WORKDIR`, det er satt til `/app` og application.jar havner da i `/app/application.jar`.
+PS: Tross dette vil Spring Boot finne konfigurasjon i `/config`, `/app/config` og `/deployments/config`. Se `SPRING_CONFIG_ADDITIONAL_LOCATION` i [Dockerfile](Dockerfile) for detaljer.
+
 
 I pipeline, sørg for å alltid hente siste versjon av base image med `pull: true`:
 
@@ -31,28 +30,55 @@ I pipeline, sørg for å alltid hente siste versjon av base image med `pull: tru
     tags:
 ```
 
-### Minimalt image
-Chiseled er et verktøy som stripper Ubuntu helt ned, slik at en kun har [pebble](https://documentation.ubuntu.com/rockcraft/latest/explanation/pebble/) som oppstart og ikke noe annet. Ingen pakker, ingen shell, ingenting annet enn det som trengs.
 
-Siden det ikke har noe shell og oppstarten dermed ikke kan dynamisk finne jar-filen, **må** navnet på applikasjonens jar være `/app/application.jar`:
+## Sikkerhet
+Chiseled er et verktøy som [stripper Ubuntu helt ned](https://hub.docker.com/r/ubuntu/jre), slik at en kun har Java for å kjøre applikasjoner og ikke noe annet. Ingen pakker, ingen shell, ingenting annet enn det som trengs. Det medfører at vi ikke trenger bekymre oss for sårbarheter og angrep, fordi de oftes gjøres via flere steg:
 
-```Dockerfile
-FROM ghcr.io/domstolene/jre:chiseled
+1. Sårbarhet i applikasjonen.
+2. Tilgjengelige verktøy, slik som `sh` eller `curl` i image.
+3. Sårbarheter i tilgjengelige verktøy i image.
 
-# navn på tjenesten i sporingsoppsettet
-ENV OTEL_SERVICE_NAME=ip-varsling-status
+Når vi har fjernet steg 2, alle verktøy som finnes i image, så er det svært vanskelig å angripe en applikasjon.
 
-ADD --chmod=644 --chown=0:1000 build/libs/*.jar application.jar
+Legg merke til at ubuntu/jre også inneholder kompilatoren `javac` og mange verktøy for feilsøking, slik som `jcmd`. De fjerner vi med [RemoveTools.java](src/RemoveTools.java), slik at en angriper ikke kan lage programmer med ren java-kode, kompilere den, så kjøre koden. Eller inspisere og endre på java-prosessen runtime.
+
+Se [seksjonen om feilsøking](#feilsøking) for hvordan en bruker verktøy som `jcmd` for å printe stacken.
+
+
+## Feilsøking
+For å feilsøke en applikasjon som bruker dette imaget trenger en å starte en midlertidig container ved siden av applikasjonen, ettersom applikasjonen har _null_ verktøy for feilsøking.
+
+Du kan starte en debug-container som dette:
+```shell
+export app=ip-varsling-status  # må også være container-navnet
+export namespace=ip-varsling   # ofte samme, men her ulikt
+export pod=$(kubectl get pods --namespace $namespace -o name | grep $app | head -n1)
+
+kubectl debug --namespace $namespace $pod \
+  --target=$app \
+  --image=eclipse-temurin:25-jdk \
+  --tty --stdin \
+  -- bash
 ```
 
-OBS: Ikke bruk `WORKDIR`, det er satt til `/app` og application.jar havner da i `/app/application.jar`.
-PS: Tross dette vil Spring Boot lete etter konfigurasjon i `/config`, `/app/config` og `/deployments/config`. Se [Dockerfile.chiseled](Dockerfile.chiseled) for detaljer.
+MERK: `oc debug` starter en debug-**pod**, så det fungerer ikke til å inspisere en kjørende applikasjon.
 
-## Sikkerhetsvarsler
-Scanne med Red Hat Advanced Cluster Security (når tilganger er på plass):
+Inni debug-containeren kan du nå kjøre kommandoer og sjekke ting:
+```shell
+# se kjørende prosesser
+ps aux
+
+# printe stacken til applikasjonen
+jcmd 1 Thread.print
+```
+
+
+## Sikkerhetsvarsler og scanning
+Scanne med Red Hat Advanced Cluster Security:
 
 ```shell
 export ROX_ENDPOINT=acs-ui.apps.ocp.mgmt.domstol.no:443
+export ROX_API_TOKEN=<fås fra plattformteamet, se https://domstol.atlassian.net/browse/PLATTFORM-3192>
 roxctl central login
 roxctl image scan --image docker.io/ubuntu/jre:25-26.04_edge --output json
 ```
@@ -61,3 +87,5 @@ Sjekke images som allerede er scannet:
 ```shell
 roxctl image check --image docker.io/ubuntu/jre:25-26.04_edge --output json
 ```
+
+Andre verktøy som er verdt å nevne er [trivy](https://github.com/aquasecurity/trivy) og [syft](https://github.com/anchore/syft).
