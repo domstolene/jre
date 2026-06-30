@@ -1,5 +1,24 @@
+### FJERNE PEBBLE ###
+# Fjern pebble fra chiseled JRE, ettersom vi bruker java som entrypoint direkte
+FROM eclipse-temurin:25-jdk-alpine AS compiler
+
+WORKDIR /build
+ADD src/RemovePebble.java RemovePebble.java
+
+RUN javac RemovePebble.java
+
+
+### BYGGE IMAGE ###
 # Minimalistisk Ubuntu uten shell med "pebble" som init-prosess.
 FROM docker.io/ubuntu/jre:25-26.04_edge
+
+
+### FJERNE PEBBLE ###
+# Hent RemovePebble.class fra compiler stage
+COPY --from=compiler /build/RemovePebble.class /app/RemovePebble.class
+
+# Kjør RemovePebble for å fjerne pebble fra chiseled JRE
+RUN ["java", "-cp", "/app", "RemovePebble"]
 
 
 ### ARGUMENTER ###
