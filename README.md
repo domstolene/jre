@@ -56,7 +56,7 @@ export pod=$(kubectl get pods --namespace $namespace -o name | grep $app | head 
 
 kubectl debug --namespace $namespace $pod \
   --target=$app \
-  --image=eclipse-temurin:25-jdk \
+  --image=docker.io/eclipse-temurin:25-jdk \
   --tty --stdin \
   -- bash
 ```
@@ -70,6 +70,15 @@ ps aux
 
 # printe stacken til applikasjonen
 jcmd 1 Thread.print
+```
+
+Dersom du trenger `curl`, kan du bruke [Red Hat Universal Base Image](https://catalog.redhat.com/en/software/base-images):
+```shell
+kubectl debug --namespace $namespace $pod \
+  --target=$app \
+  --image=ubi10 \
+  --tty --stdin \
+  -- bash
 ```
 
 
