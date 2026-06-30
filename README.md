@@ -31,20 +31,6 @@ I pipeline, sørg for å alltid hente siste versjon av base image med `pull: tru
 ```
 
 
-## Sikkerhet
-Chiseled er et verktøy som [stripper Ubuntu helt ned](https://hub.docker.com/r/ubuntu/jre), slik at en kun har Java for å kjøre applikasjoner og ikke noe annet. Ingen pakker, ingen shell, ingenting annet enn det som trengs. Det medfører at vi ikke trenger bekymre oss for sårbarheter og angrep, fordi de oftes gjøres via flere steg:
-
-1. Sårbarhet i applikasjonen.
-2. Tilgjengelige verktøy, slik som `sh` eller `curl` i image.
-3. Sårbarheter i tilgjengelige verktøy i image.
-
-Når vi har fjernet steg 2, alle verktøy som finnes i image, så er det svært vanskelig å angripe en applikasjon.
-
-Legg merke til at ubuntu/jre også inneholder kompilatoren `javac` og mange verktøy for feilsøking, slik som `jcmd`. De fjerner vi med [RemoveTools.java](src/RemoveTools.java), slik at en angriper ikke kan lage programmer med ren java-kode, kompilere den, så kjøre koden. Eller inspisere og endre på java-prosessen runtime.
-
-Se [seksjonen om feilsøking](#feilsøking) for hvordan en bruker verktøy som `jcmd` for å printe stacken.
-
-
 ## Feilsøking
 For å feilsøke en applikasjon som bruker dette imaget trenger en å starte en midlertidig container ved siden av applikasjonen, ettersom applikasjonen har _null_ verktøy for feilsøking.
 
@@ -80,6 +66,20 @@ kubectl debug --namespace $namespace $pod \
   --tty --stdin \
   -- bash
 ```
+
+
+## Sikkerhet
+Chiseled er et verktøy som [stripper Ubuntu helt ned](https://hub.docker.com/r/ubuntu/jre), slik at en kun har Java for å kjøre applikasjoner og ikke noe annet. Ingen pakker, ingen shell, ingenting annet enn det som trengs. Det medfører at vi ikke trenger bekymre oss for sårbarheter og angrep, fordi de oftes gjøres via flere steg:
+
+1. Sårbarhet i applikasjonen.
+2. Tilgjengelige verktøy, slik som `sh` eller `curl` i image.
+3. Sårbarheter i tilgjengelige verktøy i image.
+
+Når vi har fjernet steg 2, alle verktøy som finnes i image, så er det svært vanskelig å angripe en applikasjon.
+
+Legg merke til at ubuntu/jre også inneholder kompilatoren `javac` og mange verktøy for feilsøking, slik som `jcmd`. De fjerner vi med [RemoveTools.java](src/RemoveTools.java), slik at en angriper ikke kan lage programmer med ren java-kode, kompilere den, så kjøre koden. Eller inspisere og endre på java-prosessen runtime.
+
+Se [seksjonen om feilsøking](#feilsøking) for hvordan en bruker verktøy som `jcmd` for å printe stacken.
 
 
 ## Sikkerhetsvarsler og scanning
