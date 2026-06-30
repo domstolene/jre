@@ -106,13 +106,19 @@ Scanne med Red Hat Advanced Cluster Security:
 ```shell
 export ROX_ENDPOINT=acs-ui.apps.ocp.mgmt.domstol.no:443
 export ROX_API_TOKEN=<fås fra plattformteamet, se https://domstol.atlassian.net/browse/PLATTFORM-3192>
+export GRPC_ENFORCE_ALPN_ENABLED=false # brannmuren vår støtter ikke ALPN
 roxctl central login
-roxctl image scan --image docker.io/ubuntu/jre:25-26.04_edge --output json
+roxctl image scan --output json --image ghcr.io/domstolene/jre:chiseled
 ```
 
 Sjekke images som allerede er scannet:
 ```shell
-roxctl image check --image docker.io/ubuntu/jre:25-26.04_edge --output json
+roxctl image check --output json --image ghcr.io/domstolene/jre:chiseled
 ```
 
-Andre verktøy som er verdt å nevne er [trivy](https://github.com/aquasecurity/trivy) og [syft](https://github.com/anchore/syft).
+Andre verktøy som er verdt å nevne er [trivy](https://github.com/aquasecurity/trivy) og [syft](https://github.com/anchore/syft):
+
+```shell
+trivy image --severity HIGH,CRITICAL,MEDIUM ghcr.io/domstolene/jre:chiseled
+syft ghcr.io/domstolene/jre:chiseled
+```
