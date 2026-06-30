@@ -56,6 +56,10 @@ ps aux
 
 # printe stacken til applikasjonen
 jcmd 1 Thread.print
+
+# se på filsystemet til applikasjonen
+cd /proc/1/root
+ls -l
 ```
 
 Dersom du trenger `curl`, kan du bruke [Red Hat Universal Base Image](https://catalog.redhat.com/en/software/base-images):
