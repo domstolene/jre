@@ -67,6 +67,7 @@ cat /proc/1/environ | tr '\0' '\n'
 
 Shell og ønsket inspeksjon kan også kombineres som dette:
 ```shell
+# henter miljøvariabelen DB_PASSWORD
 kubectl debug --namespace $namespace $pod \
   --target=$app \
   --quiet --stdin --tty \
