@@ -60,6 +60,19 @@ jcmd 1 Thread.print
 # se på filsystemet til applikasjonen
 cd /proc/1/root
 ls -l
+
+# se miljøvariabler i poden
+cat /proc/1/environ | tr '\0' '\n'
+```
+
+Shell og ønsket inspeksjon kan også kombineres som dette:
+```shell
+kubectl debug --namespace $namespace $pod \
+  --target=$app \
+  --quiet --stdin --tty \
+  --image=eclipse-temurin:25-jdk \
+  -- sh -c "cat /proc/1/environ | tr '\\0' '\\n'" \
+  | grep DB_PASSWORD
 ```
 
 Dersom du trenger `curl`, kan du bruke [Red Hat Universal Base Image](https://catalog.redhat.com/en/software/base-images):
