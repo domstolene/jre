@@ -36,8 +36,8 @@ For å feilsøke en applikasjon som bruker dette imaget trenger en å starte en 
 
 Du kan starte en debug-container som dette:
 ```shell
-export app=ip-varsling-status  # må også være container-navnet
-export namespace=ip-varsling   # ofte samme, men her ulikt
+export app=ip-varsling-status  # må også være container-navnet, eventuelt sett containernavn i --target
+export namespace=ip-varsling   # ofte samme som app, men ulikt for ip-varsling (flere deployments)
 export pod=$(kubectl get pods --namespace $namespace -o name | grep $app | head -n1)
 
 kubectl debug --namespace $namespace $pod \
