@@ -3,45 +3,65 @@
  * for å slette verktøy som vi ikke trenger i image.
  */
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 void main() {
     String[] toolsToRemove = {
         // Oppstart
-        "pebble",   // Pebble er et verktøy for å starte applikasjoner, som vi ikke trenger
+        "pebble",       // Pebble er et verktøy for å starte applikasjoner, som vi ikke trenger
 
-        // Utvikling og kompilering
-        "javac",    // Java-kompilatoren
-        "jshell",   // Interaktivt Java-skall (REPL)
-        "jlink",    // Verktøy for å lage tilpassede JREs
-        "jmod",     // Håndterer Java-moduler
-        "javadoc",  // Genererer dokumentasjon
-        "jar",      // Pakkeverktøy for .jar-filer
+        // Utvikling, kompilering og analyse
+        "javac",        // Java-kompilatoren
+        "jshell",       // Interaktivt Java-skall (REPL)
+        "jlink",        // Verktøy for å lage tilpassede JREs
+        "jmod",         // Håndterer Java-moduler
+        "javadoc",      // Genererer dokumentasjon
+        "jar",          // Pakkeverktøy for .jar-filer
+        "jdeps",        // Analyserer pakkeavhengigheter (dependencies)
+        "jnativescan",  // Scanner etter bruk av native funksjoner (nytt i JDK)
+        "jdeprscan",    // Scanner kode for utgåtte (deprecated) API-er
+        "javap",        // Disassembler klassefiler (viser bytecode)
+        "jrunscript",   // Kommandolinjeverktøy for å kjøre JavaScript/skripting i Java
 
         // Feilsøking, profilering og overvåking (Svært attraktive for angripere)
-        "jcmd",     // Sender kontrollkommandoer til en kjørende JVM
-        "jdb",      // Java-debuggeren
-        "jhsdb",    // Avansert "Serviceability Agent" debugger
-        "jinfo",    // Genererer konfigurasjonsinformasjon fra en prosess
-        "jmap",     // Dumper minnet (Memory/Heap dump)
-        "jstack",   // Dumper alle tråder (Thread stack dump)
-        "jstat",    // Overvåker ytelsesstatistikk
-        "jstatd",   // RMI-server for jstat
-        "jimage",   // Verktøy for å pakke ut/vis jimage-filer
-        "jpackage"  // Pakker applikasjoner inn i native formater
+        "jcmd",         // Sender kontrollkommandoer til en kjørende JVM
+        "jdb",          // Java-debuggeren
+        "jhsdb",        // Avansert "Serviceability Agent" debugger
+        "jinfo",        // Genererer konfigurasjonsinformasjon fra en prosess
+        "jmap",         // Dumper minnet (Memory/Heap dump)
+        "jstack",       // Dumper alle tråder (Thread stack dump)
+        "jstat",        // Overvåker ytelsesstatistikk
+        "jstatd",       // RMI-server for jstat
+        "jimage",       // Verktøy for å pakke ut/vis jimage-filer
+        "jpackage",     // Pakker applikasjoner inn i native formater
+        "jps",          // Lister ut kjørende Java-prosesser på systemet
+        "jconsole",     // Grafisk verktøy for overvåking (krever uansett skjerm/X11)
+        "jfr",          // Verktøy for å analysere Java Flight Recorder-filer i etterkant
+
+        // Sikkerhet, nettverk og andre tjenester
+        "jarsigner",    // Brukes til å signere JAR-filer (trengs ikke for å kjøre dem)
+        "rmiregistry",  // Bootstrap-tjeneste for Legacy Java RMI (Remote Method Invocation)
+        "jwebserver"    // Minimal innebygd webserver for statiske filer (introdusert i Java 18)
     };
 
-    String path = System.getenv("PATH");
-    System.out.println("Gjeldende PATH:\n" + path);
+    // java.home peker alltid til den kjørende JDK-installasjonen, uavhengig av versjon eller arkitektur
+    Path jdkBin = Paths.get(System.getProperty("java.home"), "bin");
+    System.out.println("JDK bin-mappe: " + jdkBin);
+    System.out.println("Gjeldende PATH:\n" + System.getenv("PATH"));
 
     for (String tool : toolsToRemove) {
-        Optional<File> foundTool = finnProgramPaPath(tool);
-        if (foundTool.isPresent()) {
-            File file = foundTool.get();
-            String pathToDelete = file.getAbsolutePath();
-            System.out.println("Deleting " + pathToDelete + ", result: " + deleteRecursive(file));
+        // Slett den faktiske binærfilen i JDK-installasjonen
+        File jdkFile = jdkBin.resolve(tool).toFile();
+        if (jdkFile.exists()) {
+            System.out.println("Deleting JDK binary " + jdkFile.getAbsolutePath() + ", result: " + jdkFile.delete());
         } else {
-            System.out.println("Could not find '" + tool + "' on PATH.");
+            System.out.println("Not found in JDK bin: " + jdkFile.getAbsolutePath());
         }
+
+        // Rydd opp lenker på PATH som pekte til den nå-slettede binærfilen
+        slettSymlenkerPaPath(tool);
     }
 
     // fjern alle pebble-relaterte filer i /var/lib/pebble
@@ -58,25 +78,20 @@ void main() {
 }
 
 /**
- * Leter etter et program i systemets PATH (kun Unix-støtte).
+ * Sletter alle filer (inkl. symbollenker) med gitt navn fra kataloger i PATH.
  */
-Optional<File> finnProgramPaPath(String programNavn) {
+void slettSymlenkerPaPath(String programNavn) {
     String pathEnv = System.getenv("PATH");
-    if (pathEnv == null || pathEnv.isEmpty()) {
-        return Optional.empty();
-    }
+    if (pathEnv == null || pathEnv.isEmpty()) return;
 
-    // Unix bruker alltid kolon (:) som skilletegn i PATH
-    String[] mapper = pathEnv.split(":");
-
-    for (String mappe : mapper) {
-        File fil = new File(mappe, programNavn);
-        if (fil.exists() && fil.isFile()) {
-            return Optional.of(fil);
+    for (String mappe : pathEnv.split(":")) {
+        Path fil = Paths.get(mappe, programNavn);
+        // Files.exists følger lenker; bruk Files.lexists (finnes ikke i Java) —
+        // vi sjekker derfor med toFile().exists() OG Links.isSymbolicLink
+        if (Files.isSymbolicLink(fil) || fil.toFile().exists()) {
+            System.out.println("Deleting PATH entry " + fil + ", result: " + fil.toFile().delete());
         }
     }
-
-    return Optional.empty();
 }
 
 boolean deleteRecursive(File path) {
