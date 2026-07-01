@@ -78,13 +78,15 @@ jobs:
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}
           output-format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
           artifact-name: sbom.cyclonedx.json
 
       # Last opp den genererte SBOM-en som en sikker attestasjon til registeret
       - name: Attest SBOM to Image
         if: ${{ github.event_name != 'pull_request' }}
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-sbom@v4
         with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build-and-push.outputs.digest }}
           sbom-path: 'sbom.cyclonedx.json'
 
