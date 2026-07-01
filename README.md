@@ -122,3 +122,121 @@ Andre verktøy som er verdt å nevne er [trivy](https://github.com/aquasecurity/
 trivy image --severity HIGH,CRITICAL,MEDIUM ghcr.io/domstolene/jre:chiseled
 syft ghcr.io/domstolene/jre:chiseled
 ```
+
+
+## SLSA Provenance
+SLSA provenance attesterer *hvordan* imaget ble bygget – hvilken workflow, fra hvilken commit, og av hvilken runner. Genereres automatisk av `actions/attest-build-provenance` i [workflow som bygger docker image](.github/workflows/build-and-publish.yml).
+
+Verifiser attesteringen (standard predicate-type, ingen `--predicate-type` nødvendig):
+```shell
+gh attestation verify oci://ghcr.io/domstolene/jre:latest --repo domstolene/jre
+```
+
+Se innholdet i provenance-predikatet:
+```shell
+gh attestation download oci://ghcr.io/domstolene/jre:latest \
+  --repo domstolene/jre \
+  --predicate-type https://slsa.dev/provenance/v1  \
+  | grep "The trusted metadata is now available at sha256:" \
+  | sed 's/.* sha256:/sha256:/' \
+  | xargs jq '.dsseEnvelope.payload | @base64d | fromjson | .predicate'
+  > slsa.json
+
+# hvilken workflow som laget imaget
+jq .buildDefinition.externalParameters.workflow slsa.json
+
+# hvilken repo og commit imaget ble bygd fra
+jq .buildDefinition.resolvedDependencies[] slsa.json
+
+# hvilken run som gjorde bygget
+jq .runDetails.metadata.invocationId slsa.json
+```
+
+Output inkluderer blant annet:
+
+- `.buildDefinition.externalParameters.workflow` -
+- `.buildDefinition.resolvedDependencies[].digest.gitCommit` - hvilken commit imaget ble bygd fra
+- `.runDetails.builder.id` hvilken GitHub Actions runner som gjorde bygget
+
+
+## SBOM
+Software bill of materials, eller hva som er inni image, er generert fra [syft](https://github.com/anchore/syft) i [workflow som bygger docker image](.github/workflows/build-and-publish.yml).
+
+SBOM kan observeres med:
+```shell
+gh attestation download oci://ghcr.io/domstolene/jre:chiseled --repo domstolene/jre \
+  | grep "The trusted metadata is now available at sha256:" \
+  | sed 's/.* sha256:/sha256:/' \
+  | xargs jq --raw-output '.dsseEnvelope.payload | @base64d | fromjson | .predicate.components' \
+  > components.json
+
+jq .[].name components.json
+```
+
+Attestering av SBOM sjekkes med:
+```shell
+gh attestation verify oci://ghcr.io/domstolene/jre:latest \
+  --repo domstolene/jre \
+  --predicate-type https://cyclonedx.org/bom
+```
+
+Som skal gi et resultat tilsvarende dette:
+```
+Loaded digest sha256:70f1114bbf932bb448ff2762d9772391507498eeb34c70acae6e20e92908f0ed for oci://ghcr.io/domstolene/jre:latest
+Loaded 1 attestation from GitHub API
+
+The following policy criteria will be enforced:
+- Predicate type must match:................ https://cyclonedx.org/bom
+- Source Repository Owner URI must match:... https://github.com/domstolene
+- Source Repository URI must match:......... https://github.com/domstolene/jre
+- Subject Alternative Name must match regex: (?i)^https://github.com/domstolene/jre/
+- OIDC Issuer must match:................... https://token.actions.githubusercontent.com
+
+✓ Verification succeeded!
+
+The following 1 attestation matched the policy criteria
+
+- Attestation #1
+  - Build repo:..... domstolene/jre
+  - Build workflow:. .github/workflows/build-and-publish.yml@refs/heads/main
+  - Signer repo:.... domstolene/jre
+  - Signer workflow: .github/workflows/build-and-publish.yml@refs/heads/main
+```
+
+Legg merge til docker-manifest-digest, som du kan bruke til å pinne ned versjonen slik som dette: `ghcr.io/domstolene/jre@sha256:70f1114bbf932bb448ff2762d9772391507498eeb34c70acae6e20e92908f0ed`
+
+
+## Signering
+Signeringen som skjer i [workflow som bygger image](.github/workflows/build-and-publish.yml) garanterer at det var workflow på dette repoet som bygget imaget.
+
+Signeringen kan sjekkes med `cosign`:
+
+```shell
+cosign verify ghcr.io/domstolene/jre:chiseled \
+  --certificate-identity-regexp "https://github.com/domstolene/jre" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  | jq .
+```
+
+Skal gi en output tilsvarende dette:
+```
+Verification for ghcr.io/domstolene/jre:chiseled --
+The following checks were performed on each of these signatures:
+  - The cosign claims were validated
+  - Existence of the claims in the transparency log was verified offline
+  - The code-signing certificate was verified using trusted certificate authority certificates
+[
+  {
+    "critical": {
+      "identity": {
+        "docker-reference": "ghcr.io/domstolene/jre:chiseled"
+      },
+      "image": {
+        "docker-manifest-digest": "sha256:70f1114bbf932bb448ff2762d9772391507498eeb34c70acae6e20e92908f0ed"
+      },
+      "type": "https://sigstore.dev/cosign/sign/v1"
+    },
+    "optional": {}
+  }
+]
+```
