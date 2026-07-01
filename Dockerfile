@@ -23,7 +23,7 @@ RUN ["java", "-cp", "/app", "RemoveTools"]
 
 ### ARGUMENTER ###
 # siste versjon: gh release view --repo domstolene/da-otel-agent --json tagName --jq .tagName
-ARG DA_OTEL_AGENT_VERSION=1.7.9
+ARG DA_OTEL_AGENT_VERSION=1.8.0
 
 
 ### SPORING ###
