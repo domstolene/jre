@@ -127,9 +127,11 @@ syft ghcr.io/domstolene/jre:chiseled
 ## SLSA Provenance
 SLSA provenance attesterer *hvordan* imaget ble bygget – hvilken workflow, fra hvilken commit, og av hvilken runner. Genereres automatisk av `actions/attest-build-provenance` i [workflow som bygger docker image](.github/workflows/build-and-publish.yml).
 
-Verifiser attesteringen (standard predicate-type, ingen `--predicate-type` nødvendig):
+Verifiser attesteringen:
 ```shell
-gh attestation verify oci://ghcr.io/domstolene/jre:latest --repo domstolene/jre
+gh attestation verify oci://ghcr.io/domstolene/jre:latest \
+  --repo domstolene/jre \
+  --predicate-type https://slsa.dev/provenance/v1 # slsa er default predicate-type, men eksplisitt her for å skille med SBOM lenger ned
 ```
 
 Se innholdet i provenance-predikatet:
