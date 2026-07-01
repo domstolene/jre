@@ -26,6 +26,7 @@ jobs:
       # This is used to complete the identity challenge
       # with sigstore/fulcio when running outside of PRs.
       id-token: write
+      attestations: write # KRITISK: Gir rettighet til å skrive attestasjoner/SBOM til GHCR
 
     steps:
       - name: Checkout repository
@@ -69,6 +70,23 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:chiseled
           platforms: linux/amd64,linux/arm64/v8
+
+      # Generer en SBOM basert på imaget som nettopp ble pushet (kun hvis ikke PR)
+      - name: Generate SBOM with Syft
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: anchore/sbom-action@fe95a3eb344f6d7291f97ba35437519784093fdb # har ingen versjonering, pinnet til siste sha på main
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}
+          output-format: cyclonedx-json
+          artifact-name: sbom.cyclonedx.json
+
+      # Last opp den genererte SBOM-en som en sikker attestasjon til registeret
+      - name: Attest SBOM to Image
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-digest: ${{ steps.build-and-push.outputs.digest }}
+          sbom-path: 'sbom.cyclonedx.json'
 
       # Sign the resulting Docker image digest except on PRs.
       # This will only write to the public Rekor transparency log when the Docker
