@@ -84,11 +84,12 @@ jobs:
       # Last opp den genererte SBOM-en som en sikker attestasjon til registeret
       - name: Attest SBOM to Image
         if: ${{ github.event_name != 'pull_request' }}
-        uses: actions/attest@v2
+        uses: actions/attest@v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build-and-push.outputs.digest }}
-          sbom-path: 'sbom.cyclonedx.json'
+          predicate-type: 'https://cyclonedx.org/bom'
+          predicate-path: 'sbom.cyclonedx.json'
 
       # Sign the resulting Docker image digest except on PRs.
       # This will only write to the public Rekor transparency log when the Docker
