@@ -74,7 +74,7 @@ ENV JAVA_TOOL_OPTIONS="-Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8"
 ENTRYPOINT ["java"]
 CMD ["-javaagent:/da-otel-agent/da-otel-agent.jar", \
     "-Dotel.configuration.service.file=/da-otel-agent/da-otel-agent.yaml", \
-    "-XX:InitialRAMPercentage=75.0", \
+    "-XX:InitialRAMPercentage=40.0", \
     "-XX:MaxRAMPercentage=75.0", \
     "-jar", \
     "/app/application.jar" \
