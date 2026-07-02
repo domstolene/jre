@@ -11,6 +11,7 @@ FROM ghcr.io/domstolene/jre:chiseled
 ENV OTEL_SERVICE_NAME=ip-varsling-status
 
 # WORKDIR er /app, slik at den havner i /app/application.jar
+# konfigurasjon plukkes opp fra /config, /app/config og /deployments/config
 ADD --chmod=644 --chown=0:1000 build/libs/*.jar application.jar
 ```
 
