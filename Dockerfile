@@ -62,6 +62,8 @@ ENV OTEL_TRACES_SAMPLER=always_off
 WORKDIR /app
 USER 1000:1000
 ENV SPRING_CONFIG_ADDITIONAL_LOCATION="optional:file:/config/,optional:file:/app/config/,optional:file:/deployments/config/"
+# sørg for at stdout skriver med UTF-8
+ENV JAVA_TOOL_OPTIONS="-Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8"
 
 ENTRYPOINT ["java"]
 CMD ["-javaagent:/da-otel-agent/da-otel-agent.jar", \
