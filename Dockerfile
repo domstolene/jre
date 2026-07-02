@@ -10,7 +10,7 @@ RUN javac RemoveTools.java
 
 # /app må ligge i /build for at vi skal kunne kopiere
 # mappen _med_ rettighetene
-RUN chown -R 0:1000 /build/app && \
+RUN chown -R 0:0 /build/app && \
     chmod -R 775 /build/app
 
 
@@ -21,7 +21,7 @@ FROM docker.io/ubuntu/jre:25-26.04_edge AS chiseled
 
 ### FJERNE VERKTØY ###
 # Hent RemoveTools.class og /app fra compiler stage
-COPY --from=compiler --chown=0:1000 /build/ /
+COPY --from=compiler --chown=0:0 /build/ /
 
 # Kjør RemoveTools for å fjerne VERKTØY fra chiseled JRE
 RUN ["java", "-cp", "/app", "RemoveTools"]
@@ -66,7 +66,7 @@ ENV OTEL_TRACES_SAMPLER=always_off
 
 ### OPPSTART DIREKTE VIA JAVA MED UPRIVILIGERT BRUKER ###
 WORKDIR /app
-USER 1000:1000
+USER 1000:0
 ENV SPRING_CONFIG_ADDITIONAL_LOCATION="optional:file:/config/,optional:file:/app/config/,optional:file:/deployments/config/"
 # sørg for at stdout skriver med UTF-8
 ENV JAVA_TOOL_OPTIONS="-Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8"
