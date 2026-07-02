@@ -87,6 +87,20 @@ kubectl debug --namespace $namespace $pod \
 ```
 
 
+### Feilsøke base image
+Siden det er så vanskelig å observere imaget uten verktøy i det, er det enkleste trikset å skrive
+verktøy selv for å inspisere. Eksempelvis, dersom en ønsker å inspisere hva som er på PATH, kan
+en bruke en instruks som denne:
+
+> Lag et program i java 25 som finner alle program på PATH i linux. Det skal liste ut hele stien til programmet, slik som /bin/sh, filrettigheter og eier. Bruk enkel main-metode, uten klasse. Skriv til onpath.java
+
+Kompiler programmet og kjør det i container:
+```shell
+javac onpath.java
+docker run -it -v $(pwd):/app ghcr.io/domstolene/jre onpath
+```
+
+
 ## Sikkerhet
 Chiseled er et verktøy som [stripper Ubuntu helt ned](https://hub.docker.com/r/ubuntu/jre), slik at en kun har Java for å kjøre applikasjoner og ikke noe annet. Ingen pakker, ingen shell, ingenting annet enn det som trengs. Det medfører at vi ikke trenger bekymre oss for sårbarheter og angrep, fordi de oftes gjøres via flere steg:
 
