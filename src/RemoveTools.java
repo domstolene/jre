@@ -69,11 +69,17 @@ void main() {
     System.out.println("Deleting /var/lib/pebble, result: " + result);
 
     // Slett oss selv til slutt
-    File me = new File("/app/RemoveTools.class");
+    File me = new File("/app/RemoveTools.java");
+    File meClass = new File("/app/RemoveTools.class");
     if (me.exists()) {
         System.out.println("Deleting self, result: " + me.delete());
     } else {
         System.out.println("Self file not found: " + me.getAbsolutePath());
+    }
+    if (meClass.exists()) {
+        System.out.println("Deleting self class, result: " + meClass.delete());
+    } else {
+        System.out.println("Self class file not found: " + meClass.getAbsolutePath());
     }
 }
 

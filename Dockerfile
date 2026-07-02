@@ -2,10 +2,16 @@
 # Fjern utviklerverktøy fra chiseled JRE, vi trenger kun java som entrypoint, ikke noe annet
 FROM eclipse-temurin:25-jdk-alpine AS compiler
 
-WORKDIR /build
+# Kopierer inn RemoveTools.java og lager /app
+# med skriverettigheter for gruppen 1000
+WORKDIR /build/app
 ADD src/RemoveTools.java RemoveTools.java
-
 RUN javac RemoveTools.java
+
+# /app må ligge i /build for at vi skal kunne kopiere
+# mappen _med_ rettighetene
+RUN chown -R 0:1000 /build/app && \
+    chmod -R 775 /build/app
 
 
 ### BYGGE IMAGE ###
@@ -14,8 +20,8 @@ FROM docker.io/ubuntu/jre:25-26.04_edge AS chiseled
 
 
 ### FJERNE VERKTØY ###
-# Hent RemoveTools.class fra compiler stage
-COPY --from=compiler /build/RemoveTools.class /app/RemoveTools.class
+# Hent RemoveTools.class og /app fra compiler stage
+COPY --from=compiler --chown=0:1000 /build/ /
 
 # Kjør RemoveTools for å fjerne VERKTØY fra chiseled JRE
 RUN ["java", "-cp", "/app", "RemoveTools"]
