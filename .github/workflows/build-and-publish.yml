@@ -20,6 +20,8 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.build-and-push.outputs.digest }}
     permissions:
       contents: read
       packages: write
@@ -27,6 +29,10 @@ jobs:
       # with sigstore/fulcio when running outside of PRs.
       id-token: write
       attestations: write # KRITISK: Gir rettighet til å skrive attestasjoner/SBOM til GHCR
+      pages: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy-pages.outputs.page_url }}
 
     steps:
       - name: Checkout repository
@@ -75,7 +81,7 @@ jobs:
       # Attester SLSA provenance (hvem bygget, fra hvilken commit, i hvilken workflow)
       - name: Attest build provenance
         if: ${{ github.event_name != 'pull_request' }}
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build-and-push.outputs.digest }}
@@ -113,3 +119,22 @@ jobs:
         # This step uses the identity token to provision an ephemeral certificate
         # against the sigstore community Fulcio instance.
         run: cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ env.DIGEST }}
+
+      - name: Generate SVG badge and index page
+        if: ${{ github.event_name != 'pull_request' }}
+        env:
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          OUTPUT_DIR: ./dist
+        run: bash src/generate-pages.sh
+
+      - name: Upload Pages artifact
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ./dist
+
+      - name: Deploy to GitHub Pages
+        if: ${{ github.event_name != 'pull_request' }}
+        id: deploy-pages
+        uses: actions/deploy-pages@v5

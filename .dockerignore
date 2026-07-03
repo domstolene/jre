@@ -1,0 +1,4 @@
+.git/
+.github/
+*.md
+src/generate-pages.sh
