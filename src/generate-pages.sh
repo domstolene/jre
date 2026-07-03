@@ -154,6 +154,7 @@ cat > "${OUTPUT_DIR}/index.html" << EOF
       position: fixed;
       inset: 0;
       width: 90vw;
+      height: 85vh;
       max-height: 85vh;
       margin: auto;
       border: 1px solid #d0d7de;
