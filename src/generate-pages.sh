@@ -310,9 +310,11 @@ cat > "${OUTPUT_DIR}/index.html" << EOF
           .sort(function (a, b) { return byType[b] - byType[a]; })
           .map(function (t) { return byType[t] + ' x ' + t; })
           .join(', ');
-        var tgt = data.source && data.source.target;
-        var src = (tgt && (tgt.userInput || tgt.image || tgt.path)) || 'ukjent';
-        var ts  = (data.descriptor && data.descriptor.timestamp) || '';
+        var tgt = data.source && (data.source.metadata || data.source.target);
+        var src = (tgt && (tgt.userInput || tgt.image || tgt.path)) || (data.source && data.source.name) || 'ukjent';
+        var ts  = (data.descriptor && data.descriptor.timestamp)
+               || (tgt && tgt.labels && tgt.labels['org.opencontainers.image.created'])
+               || '';
         var ver = (data.descriptor && data.descriptor.version)   || '';
         var nm  = (data.descriptor && data.descriptor.name)      || 'syft';
 
