@@ -215,6 +215,7 @@ cat > "${OUTPUT_DIR}/index.html" << EOF
 <body>
   <h1>JRE Docker Image – siste bygg</h1>
   <p class="meta">Bygget: <strong>${BUILD_TIME}</strong></p>
+  <p class="meta">Repo: <a href="https://github.com/domstolene/jre">domstolene/jre</a></p>
 
   <table>
     <thead>
