@@ -150,6 +150,32 @@ cat > "${OUTPUT_DIR}/index.html" << EOF
     thead th[data-sort="asc"]::after  { content: " \25b2"; font-size: .7em; opacity: .7; }
     thead th[data-sort="desc"]::after { content: " \25bc"; font-size: .7em; opacity: .7; }
     .no-vulns { color: #1a7f37; font-weight: 600; padding: .5rem 0; margin: 0; }
+    tbody tr.cve-row { cursor: pointer; }
+    tbody tr.cve-row:hover td { background: #dbeafe !important; }
+    #cve-dialog {
+      position: fixed;
+      inset: 0;
+      width: 660px;
+      max-width: 95vw;
+      max-height: 85vh;
+      margin: auto;
+      border: 1px solid #d0d7de;
+      border-radius: 8px;
+      padding: 1.5rem;
+      overflow-y: auto;
+      box-shadow: 0 8px 24px rgba(0,0,0,.25);
+    }
+    #cve-dialog::backdrop { background: rgba(0,0,0,.5); }
+    .h-table { width: 100%; border-collapse: collapse; border: 1px solid #d0d7de; border-radius: 6px; overflow: hidden; margin-bottom: .5rem; }
+    .h-table tr:nth-child(odd)  th,
+    .h-table tr:nth-child(odd)  td { background: #ffffff; }
+    .h-table tr:nth-child(even) th,
+    .h-table tr:nth-child(even) td { background: #f6f8fa; }
+    .h-table th { width: 150px; text-align: left; padding: .55rem .85rem; font-weight: 600; color: #57606a; border-top: 1px solid #d0d7de; white-space: nowrap; vertical-align: top; cursor: default; }
+    .h-table td { padding: .55rem .85rem; border-top: 1px solid #d0d7de; vertical-align: top; word-break: break-word; }
+    .h-table td a { color: #0969da; }
+    .h-table tr:first-child th, .h-table tr:first-child td { border-top: none; }
+    .cve-desc { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #d0d7de; font-size: .9em; line-height: 1.6; }
     #json-dialog {
       position: fixed;
       inset: 0;
@@ -250,6 +276,15 @@ cat > "${OUTPUT_DIR}/index.html" << EOF
     <div id="syft-table"></div>
   </section>
 
+  <dialog id="cve-dialog">
+    <div class="dialog-header">
+      <strong id="cve-dialog-title" style="font-family:ui-monospace,monospace;font-size:.95rem"></strong>
+      <button class="copy-btn" onclick="document.getElementById('cve-dialog').close()">Lukk &#x2715;</button>
+    </div>
+    <dl class="h-table" id="cve-dl"></dl>
+    <div class="cve-desc" id="cve-desc"></div>
+  </dialog>
+
   <dialog id="json-dialog">
     <div class="dialog-header">
       <strong id="json-dialog-title"></strong>
@@ -261,7 +296,7 @@ cat > "${OUTPUT_DIR}/index.html" << EOF
 
   <script>
     (function () {
-      var _syft, _grype;
+      var _syft, _grype, _cveMatches;
 
       function esc(s) {
         return String(s == null ? '' : s)
@@ -377,20 +412,29 @@ cat > "${OUTPUT_DIR}/index.html" << EOF
           var sb = sevOrd[b.vulnerability.severity] !== undefined ? sevOrd[b.vulnerability.severity] : 9;
           return sa - sb;
         });
-        var cols = ['CVE', 'Alvorlighetsgrad', 'Pakke', 'Versjon', 'Fikset i'];
-        var rows = sorted.map(function (m) {
-          var fix = (m.vulnerability.fix && m.vulnerability.fix.versions && m.vulnerability.fix.versions.length)
-            ? m.vulnerability.fix.versions.join(', ')
-            : '\u2014';
-          return [
-            m.vulnerability.id || '',
-            m.vulnerability.severity || '',
-            m.artifact.name || '',
-            m.artifact.version || '',
-            fix
-          ];
-        });
-        el.innerHTML = buildTable(cols, rows);
+        _cveMatches = sorted;
+        var colDefs = [
+          { label: 'CVE', tip: null },
+          { label: 'Alvorlighet', tip: null },
+          { label: 'Pakke', tip: null },
+          { label: 'Beskrivelse', tip: null }
+        ];
+        var ths = colDefs.map(function (c) {
+          return c.tip
+            ? '<th title="' + esc(c.tip) + '" style="cursor:help">' + esc(c.label) + ' \u24d8</th>'
+            : '<th>' + esc(c.label) + '</th>';
+        }).join('');
+        var trs = sorted.map(function (m, idx) {
+          var id = m.vulnerability.id || '';
+          var desc = (m.relatedVulnerabilities || []).reduce(function (s, rv) { return s || rv.description || ''; }, '') || m.vulnerability.description || '';
+          return '<tr class="cve-row" onclick="showCveDetail(' + idx + ')">' +
+            '<td><a href="https://nvd.nist.gov/vuln/detail/' + esc(id) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">' + esc(id) + '</a></td>' +
+            '<td>' + esc(m.vulnerability.severity || '') + '</td>' +
+            '<td>' + esc(m.artifact.name || '') + '</td>' +
+            '<td style="font-size:.9em">' + esc(desc) + '</td>' +
+            '</tr>';
+        }).join('');
+        el.innerHTML = '<table><thead><tr>' + ths + '</tr></thead><tbody>' + trs + '</tbody></table>';
         addSort(el.querySelector('table'));
       }
 
@@ -402,7 +446,78 @@ cat > "${OUTPUT_DIR}/index.html" << EOF
         document.getElementById('json-dialog').showModal();
       };
 
+      window.showCveDetail = function (idx) {
+        var m = _cveMatches[idx];
+        var id = m.vulnerability.id || '';
+        var epssArr = m.vulnerability.epss;
+        var epssVal = (epssArr && epssArr.length) ? (epssArr[0].epss * 100).toFixed(3) + '\u00a0%' : '\u2014';
+        var pctVal  = (epssArr && epssArr.length) ? (epssArr[0].percentile * 100).toFixed(1) + '\u00a0%' : '\u2014';
+        var fix = (m.vulnerability.fix && m.vulnerability.fix.versions && m.vulnerability.fix.versions.length)
+          ? m.vulnerability.fix.versions.join(', ')
+          : '\u2014';
+        var allCvss = (m.vulnerability.cvss || []).concat(
+          (m.relatedVulnerabilities || []).reduce(function (acc, rv) { return acc.concat(rv.cvss || []); }, [])
+        ).filter(function (c, i, arr) {
+          return arr.findIndex(function (x) { return x.source === c.source; }) === i;
+        });
+        var cvssHtml = allCvss.length
+          ? '<table style="width:100%;border-collapse:collapse;border:1px solid #d0d7de;border-radius:4px;overflow:hidden;font-size:.85em;margin-top:.25rem">' +
+            '<thead><tr>' +
+            '<th style="background:#0969da;color:#fff;text-align:left;padding:.4rem .75rem;font-weight:600">Kilde</th>' +
+            '<th style="background:#0969da;color:#fff;text-align:left;padding:.4rem .75rem;font-weight:600" title="CVSS Base Score (0\u201310). Under 4: lav. 4\u20136.9: medium. 7\u20138.9: h\u00f8y. 9\u201310: kritisk.">Score \u24d8</th>' +
+            '<th style="background:#0969da;color:#fff;text-align:left;padding:.4rem .75rem;font-weight:600" title="Utnyttbarhet (0\u20133.9): hvor lett s\u00e5rbarheten er \u00e5 utnytte. F.eks. 3.9 = ingen autentisering, tilgjengelig over nett; 2.0 = krever lokal tilgang; 0.5 = krever komplekse betingelser og brukerinteraksjon.">Utnytt. \u24d8</th>' +
+            '<th style="background:#0969da;color:#fff;text-align:left;padding:.4rem .75rem;font-weight:600" title="P\u00e5virkning (0\u20136): konsekvensene ved utnyttelse. F.eks. 5.9 = full tap av konfidensialitet, integritet eller tilgjengelighet; 3.6 = delvis p\u00e5virkning p\u00e5 \u00e9n egenskap; 1.4 = minimal skade uten varig p\u00e5virkning.">P\u00e5virk. \u24d8</th>' +
+            '</tr></thead><tbody>' +
+            allCvss.map(function (c, i) {
+              var bg = i % 2 === 0 ? '#ffffff' : '#f6f8fa';
+              var badge = c.type === 'Primary'
+                ? ' <span style="font-size:.7em;background:#0969da;color:#fff;border-radius:3px;padding:.1em .35em;vertical-align:middle">Primary</span>'
+                : '';
+              var b  = c.metrics && c.metrics.baseScore           != null ? c.metrics.baseScore.toFixed(1)           : '\u2014';
+              var ex = c.metrics && c.metrics.exploitabilityScore != null ? c.metrics.exploitabilityScore.toFixed(1) : '\u2014';
+              var im = c.metrics && c.metrics.impactScore         != null ? c.metrics.impactScore.toFixed(1)         : '\u2014';
+              var rawVector = c.vector ? c.vector.replace(/^CVSS:\d+\.\d+\//, '') : '';
+              var calcUrl = 'https://nvd.nist.gov/vuln-metrics/cvss/v3-calculator?vector=' + encodeURIComponent(rawVector) + '&version=' + encodeURIComponent(c.version);
+              var td = 'style="padding:.4rem .75rem;border-top:1px solid #d0d7de;background:' + bg + ';vertical-align:top"';
+              return '<tr style="cursor:pointer" onclick="window.open(\'' + esc(calcUrl) + '\',\'_blank\')" title="\\u00c5pne i CVSS-kalkulator p\\u00e5 nvd.nist.gov">' +
+                '<td ' + td + '>' + esc(c.source) + badge + '</td>' +
+                '<td ' + td + '>' + esc(b)  + '</td>' +
+                '<td ' + td + '>' + esc(ex) + '</td>' +
+                '<td ' + td + '>' + esc(im) + '</td>' +
+                '</tr>';
+            }).join('') +
+            '</tbody></table>'
+          : '\u2014';
+        var allUrls = (m.vulnerability.urls || []).concat(
+          (m.relatedVulnerabilities || []).reduce(function (acc, rv) { return acc.concat(rv.urls || []); }, [])
+        ).filter(function (u, i, arr) { return arr.indexOf(u) === i; });
+        var urlsHtml = allUrls.length
+          ? allUrls.map(function (u) {
+              var label = u.replace(/^https?:\/\//, '').replace(/\/$/, '');
+              return '<a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + esc(label) + '</a>';
+            }).join('<br>')
+          : '\u2014';
+        var desc = (m.relatedVulnerabilities || []).reduce(function (s, rv) { return s || rv.description || ''; }, '') || m.vulnerability.description || '';
+        document.getElementById('cve-dialog-title').textContent = id;
+        document.getElementById('cve-dl').outerHTML = '<table class="h-table" id="cve-dl"><tbody>' +
+          '<tr><th>Alvorlighet</th><td>' + esc(m.vulnerability.severity || '\u2014') + '</td></tr>' +
+          '<tr><th>Pakke</th><td>' + esc(m.artifact.name || '') + '\u00a0' + esc(m.artifact.version || '') + '</td></tr>' +
+          '<tr><th>Fikset i</th><td>' + esc(fix) + '</td></tr>' +
+          '<tr><th title="Common Vulnerability Scoring System \u2013 tallfestet alvorlighetsgrad 0\u201310. Under 4: lav. 4\u20136.9: medium. 7\u20138.9: h\u00f8y. 9\u201310: kritisk. Utnyttbarhet (0\u20133.9) m\u00e5ler hvor lett angrepet er. P\u00e5virkning (0\u20136) m\u00e5ler konsekvensene.">CVSS per kilde \u24d8</th><td>' + cvssHtml + '</td></tr>' +
+          '<tr><th title="Exploit Prediction Scoring System \u2013 sannsynligheten for at s\u00e5rbarheten aktivt utnyttes innen 30 dager. F.eks. betyr 2.0\u00a0% at det er 2 av 100 sjanse for at s\u00e5rbarheten aktivt utnyttes i l\u00f8pet av neste m\u00e5ned.">EPSS \u24d8</th><td>' + esc(epssVal) + '</td></tr>' +
+          '<tr><th title="Rangerer s\u00e5rbarheten etter EPSS-score mot alle andre kjente CVE-er. 90\u00a0% betyr at kun 10\u00a0% av alle CVE-er har h\u00f8yere sannsynlighet for utnyttelse \u2013 alvorlig. 50\u00a0% betyr midt p\u00e5 treet. 10\u00a0% betyr at 90\u00a0% har h\u00f8yere score \u2013 lav risiko.">Persentil \u24d8</th><td>' + esc(pctVal) + '</td></tr>' +
+          '<tr><th>Lenker</th><td style="line-height:1.8">' + urlsHtml + '</td></tr>' +
+          '</tbody></table>';
+        document.getElementById('cve-desc').innerHTML = desc
+          ? '<strong>Beskrivelse</strong><p style="margin:.5rem 0 0">' + esc(desc) + '</p>' : '';
+        document.getElementById('cve-dialog').showModal();
+      };
+
       document.getElementById('json-dialog').addEventListener('click', function (e) {
+        if (e.target === this) this.close();
+      });
+
+      document.getElementById('cve-dialog').addEventListener('click', function (e) {
         if (e.target === this) this.close();
       });
 
