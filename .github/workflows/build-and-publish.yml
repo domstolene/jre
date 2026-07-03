@@ -134,11 +134,17 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         id: grype-scan
         run: |
-          curl --silent --location --show-error --failhttps://github.com/anchore/grype/releases/download/v0.115.0/grype_0.115.0_linux_amd64.tar.gz | tar xz -C /tmp
+          curl --silent --location --show-error --fail \
+            https://github.com/anchore/grype/releases/download/v0.115.0/grype_0.115.0_linux_amd64.tar.gz \
+            | tar xz -C /tmp
           /tmp/grype version
+
+          ubuntu_version=$(grep FROM Dockerfile | grep ubuntu/jre | cut -d: -f2 | cut -d- -f 2 | cut -d_ -f1)
+
           /tmp/grype "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}" \
-            --distro ubuntu:26.04 \
+            --distro ubuntu:${ubuntu_version} \
             -o json > grype.json
+
           echo "json=grype.json" >> "$GITHUB_OUTPUT"
 
       - name: Generate SVG badge and index page
