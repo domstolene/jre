@@ -67,8 +67,22 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
+          pull: true
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:chiseled
+          platforms: linux/amd64,linux/arm64/v8
+
+      # Build and push Docker image with Buildx (don't push on PR)
+      # https://github.com/docker/build-push-action
+      - name: Build and push Docker image
+        id: build-and-push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          pull: true
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ubi
+          file: Dockerfile.ubi
           platforms: linux/amd64,linux/arm64/v8
 
       # Attester SLSA provenance (hvem bygget, fra hvilken commit, i hvilken workflow)
