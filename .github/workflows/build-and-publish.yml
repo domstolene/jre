@@ -120,12 +120,33 @@ jobs:
         # against the sigstore community Fulcio instance.
         run: cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ env.DIGEST }}
 
+      - name: Scan image contents with Syft
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: anchore/sbom-action@fe95a3eb344f6d7291f97ba35437519784093fdb # har ingen versjonering, pinnet til siste sha på main
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}
+          format: syft-json
+          output-file: syft.json
+          artifact-name: syft.json
+          upload-release-assets: false
+
+      - name: Scan vulnerabilities with Grype
+        if: ${{ github.event_name != 'pull_request' }}
+        id: grype-scan
+        uses: anchore/scan-action@229edc86a0f0a8c34ea883607b5fa8310b1c35d8 # v7.5.17
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}
+          fail-build: false
+          output-format: json
+
       - name: Generate SVG badge and index page
         if: ${{ github.event_name != 'pull_request' }}
         env:
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           OUTPUT_DIR: ./dist
+          SYFT_JSON: ./syft.json
+          GRYPE_JSON: ${{ steps.grype-scan.outputs.json }}
         run: bash src/generate-pages.sh
 
       - name: Upload Pages artifact
