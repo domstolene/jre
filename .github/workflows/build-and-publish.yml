@@ -133,11 +133,13 @@ jobs:
       - name: Scan vulnerabilities with Grype
         if: ${{ github.event_name != 'pull_request' }}
         id: grype-scan
-        uses: anchore/scan-action@229edc86a0f0a8c34ea883607b5fa8310b1c35d8 # v7.5.17
-        with:
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}
-          fail-build: false
-          output-format: json
+        run: |
+          curl --silent --location --show-error --failhttps://github.com/anchore/grype/releases/download/v0.115.0/grype_0.115.0_linux_amd64.tar.gz | tar xz -C /tmp
+          /tmp/grype version
+          /tmp/grype "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}" \
+            --distro ubuntu:26.04 \
+            -o json > grype.json
+          echo "json=grype.json" >> "$GITHUB_OUTPUT"
 
       - name: Generate SVG badge and index page
         if: ${{ github.event_name != 'pull_request' }}
