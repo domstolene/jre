@@ -1,6 +1,7 @@
 [![Build Status](https://github.com/domstolene/jre/actions/workflows/build-and-publish.yml/badge.svg?branch=main)](https://github.com/domstolene/jre/actions/workflows/build-and-publish.yml)
+[![Byggerapport](byggerapport.svg)](https://domstolene.github.io/jre/)
+![Siste bygg](https://domstolene.github.io/jre/digest.svg)
 
-[![Siste bygg](https://domstolene.github.io/jre/digest.svg)](https://domstolene.github.io/jre/)
 
 # JRE
 Et base image for Java-applikasjoner i domstolene optimalisert for applikasjoner som skal kjøre i vår plattform, men minst mulig sikkerhetssårbarheter og mest mulig ferdigkonfigurert for deg.
