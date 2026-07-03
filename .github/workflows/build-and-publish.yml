@@ -72,10 +72,8 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:chiseled
           platforms: linux/amd64,linux/arm64/v8
 
-      # Build and push Docker image with Buildx (don't push on PR)
-      # https://github.com/docker/build-push-action
+      # UBI 10 micro variant
       - name: Build and push Docker image
-        id: build-and-push
         uses: docker/build-push-action@v7
         with:
           context: .
