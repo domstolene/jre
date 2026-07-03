@@ -16,7 +16,6 @@ DOCKERFILE="${SCRIPT_DIR}/../Dockerfile"
 # Les base image fra linjen «FROM docker.io/ubuntu/jre:TAG AS chiseled»
 BASE_IMAGE=$(grep -m1 'FROM docker.io/ubuntu/jre' "$DOCKERFILE" | awk '{print $2}')
 TAG="${BASE_IMAGE#*:}"                        # f.eks. 25-26.04_edge
-JAVA_VERSION="${TAG%%-*}"                     # f.eks. 25
 UBUNTU_VERSION="$(echo "$TAG" | cut -d'-' -f2)" # f.eks. 26.04
 
 OUTPUT_DIR="${OUTPUT_DIR:-./dist}"
@@ -25,7 +24,8 @@ GRYPE_JSON="${GRYPE_JSON:-${SCRIPT_DIR}/../grype.json}"
 mkdir -p "$OUTPUT_DIR"
 
 IMAGE=${IMAGE:-"ghcr.io/domstolene/jre"}
-DIGEST=${DIGEST:?"DIGEST environment variable is required, example: DIGEST=sha256:6e154e0440805d408cd556a2ff4a4c8a217ff5d1bb8ad6e7ca517d5d14a6aae $0"}
+DIGEST=${DIGEST:?"DIGEST environment variable is required, example: DIGEST=sha256:502a7e0e996bdfe2ff6fdc6204350f016af1ca04df69ae315dc8fdd310c502aa $0"}
+JAVA_VERSION=$(docker run "$IMAGE@$DIGEST" -version 2>&1 | grep -v JAVA_TOOL_OPTIONS)
 
 FULL_REF="${IMAGE}@${DIGEST}"
 BUILD_TIME=$(date -u '+%Y-%m-%dT%H:%M UTC')
@@ -83,11 +83,13 @@ cat > "${OUTPUT_DIR}/index.html" << EOF
     td { padding: .65rem 1rem; vertical-align: middle; border-top: 1px solid #d0d7de; }
     td:first-child { width: 200px; color: #57606a; font-weight: 600; white-space: nowrap; }
     code {
+      display: inline-block;
       font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
       font-size: .85em;
       background: #eaeef2;
       padding: .15em .4em;
       border-radius: 4px;
+      white-space: pre-wrap;
       word-break: break-all;
     }
     .copy-btn {
