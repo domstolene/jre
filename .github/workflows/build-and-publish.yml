@@ -72,17 +72,6 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:chiseled
           platforms: linux/amd64,linux/arm64/v8
 
-      # UBI 10 micro variant
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          pull: true
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ubi
-          file: Dockerfile.ubi
-          platforms: linux/amd64,linux/arm64/v8
-
       # Attester SLSA provenance (hvem bygget, fra hvilken commit, i hvilken workflow)
       - name: Attest build provenance
         if: ${{ github.event_name != 'pull_request' }}
