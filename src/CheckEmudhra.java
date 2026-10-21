@@ -1,7 +1,9 @@
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.security.KeyStore;
 import java.security.MessageDigest;
+import java.security.cert.CertPathBuilderException;
 import java.security.cert.CertPathValidatorException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
@@ -11,6 +13,9 @@ import javax.net.ssl.SSLHandshakeException;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
 
 public class CheckEmudhra {
     private static final Set<String> AFFECTED_TLS_KEYS = Set.of(
@@ -20,6 +25,12 @@ public class CheckEmudhra {
             "49DD353DC2B919A3770645117D0E60C16115E7D1BC259EEFE734B00EA434FE5F",
             "63ECEFEE431D49523BC1136C4E72D0206A477086CAF606CD5CF025686C109CF8",
             "5C0660A2B164910D8FF589C18E14552E9E0EC237DCEFE2CB736D41A4811F81A0");
+
+    private static final Set<String> UNTRUSTED_ROOTS = Set.of(
+            "86A1ECBA089C4A8D3BBE2734C612BA341D813E043CF9E8A862CD5C57A36BBE6B",
+            "D7A7A0FB5D7E2731D771E9484EBCDEF71D5F0C3E0A2948782BC83EE0EA699EF4",
+            "7DD78D5F4F13459A83DFF9ABBBA62EDBAF6F2D102BF257FD712F4D9F2746ED8D",
+            "F2EDAAFF3D9B701FB4D14C9F285F8C0BAD90FC3BCC1FA07D47F4718EDABA34A5");
 
     public static void main(String[] args) throws Exception {
         boolean requireBlocked = args.length == 1 && "--require-blocked".equals(args[0]);
@@ -31,6 +42,7 @@ public class CheckEmudhra {
                 + System.getProperty("com.sun.net.ssl.checkRevocation", "false"));
         System.out.println("ocsp.enable: " + java.security.Security.getProperty("ocsp.enable"));
 
+        boolean rootsRemoved = !hasUntrustedRootInTrustStore();
         int trusted = 0;
         int rejected = 0;
         int unknown = 0;
@@ -74,7 +86,7 @@ public class CheckEmudhra {
                             + " TLS CA - " + region.toUpperCase(java.util.Locale.ROOT)
                             + ("g3b".equals(region) ? ", O=eMudhra BV, C=NL" : ", O=eMudhra Inc, C=US");
                         if (certificateFailure && (!requireBlocked
-                            || isBlockedCertificate(exception, expectedSubject))) {
+                            || (rootsRemoved && isBlockedCertificate(exception, expectedSubject)))) {
                             rejected++;
                             System.out.println("REJECTED " + host + " - " + exception.getMessage());
                         } else {
@@ -91,13 +103,35 @@ public class CheckEmudhra {
         System.out.printf("Result: TRUSTED=%d REJECTED=%d UNKNOWN=%d%n", trusted, rejected, unknown);
         System.out.println("Only the 12 published TLS endpoints were tested, not code signing or past attacks.");
         System.out.println(requireBlocked
-                ? "REJECTED requires an explicit JVM blocklist rejection of the expected intermediate."
-                : "REJECTED describes this handshake, not proof of a specific CA blocklist.");
+                ? "REJECTED requires untrusted eMudhra/AAA roots to be removed from cacerts and path building to fail."
+                : "REJECTED describes this handshake, not proof of specific root removal.");
         System.exit(trusted > 0 ? 1 : unknown > 0 ? 2 : 0);
+    }
+
+    static boolean hasUntrustedRootInTrustStore() throws Exception {
+        TrustManagerFactory factory = TrustManagerFactory.getInstance(
+                TrustManagerFactory.getDefaultAlgorithm());
+        factory.init((KeyStore) null);
+        for (TrustManager manager : factory.getTrustManagers()) {
+            if (manager instanceof X509TrustManager x509Manager) {
+                for (X509Certificate issuer : x509Manager.getAcceptedIssuers()) {
+                    String sha256 = HexFormat.of().withUpperCase().formatHex(
+                            MessageDigest.getInstance("SHA-256").digest(issuer.getEncoded()));
+                    if (UNTRUSTED_ROOTS.contains(sha256)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     static boolean isBlockedCertificate(Throwable exception, String expectedSubject) {
         for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+            if (cause instanceof CertPathBuilderException
+                    && "unable to find valid certification path to requested target".equals(cause.getMessage())) {
+                return true;
+            }
             if (cause instanceof CertPathValidatorException
                     && ("Untrusted certificate: " + expectedSubject).equals(cause.getMessage())) {
                 return true;
