@@ -105,6 +105,19 @@ public class RemoveUntrustedCertificateRootsTest {
             RemoveUntrustedCertificateRoots.remove(file);
             check(Arrays.equals(first, Files.readAllBytes(file)), "Repeated run changed the file");
 
+            // Regression test: JKS-formatted cacerts (magic 0xFEEDFEED, e.g. Debian/Ubuntu ca-certificates-java)
+            writeJksFixture(file, systemCacerts);
+            check(RemoveUntrustedCertificateRoots.isJks(Files.readAllBytes(file)), "Expected JKS fixture");
+            RemoveUntrustedCertificateRoots.remove(file);
+            Set<String> afterJks = loadFingerprints(file);
+            for (String untrusted : RemoveUntrustedCertificateRoots.UNTRUSTED_ROOTS.keySet()) {
+                check(!afterJks.contains(untrusted), "Untrusted root still present in JKS: " + untrusted);
+            }
+            check(afterJks.equals(expectedRemaining), "JKS unrelated root certificates were modified or lost");
+            byte[] firstJks = Files.readAllBytes(file);
+            RemoveUntrustedCertificateRoots.remove(file);
+            check(Arrays.equals(firstJks, Files.readAllBytes(file)), "Repeated JKS run changed the file");
+
             for (String invalid : new String[] {"", "not-a-keystore"}) {
                 Files.writeString(file, invalid);
                 boolean rejected = false;
@@ -160,8 +173,9 @@ public class RemoveUntrustedCertificateRootsTest {
     }
 
     private static void seedUntrustedRoots(Path file) throws Exception {
+        byte[] rawBytes = Files.readAllBytes(file);
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
-        try (InputStream input = Files.newInputStream(file)) {
+        try (InputStream input = new java.io.ByteArrayInputStream(rawBytes)) {
             keyStore.load(input, null);
         }
         java.security.cert.CertificateFactory cf =
@@ -172,9 +186,26 @@ public class RemoveUntrustedCertificateRootsTest {
         keyStore.setCertificateEntry("comodoaaaca [jdk]",
                 cf.generateCertificate(new java.io.ByteArrayInputStream(
                         AAA_CERTIFICATE_SERVICES_PEM.getBytes(java.nio.charset.StandardCharsets.US_ASCII))));
-        try (java.io.OutputStream output = Files.newOutputStream(file)) {
-            keyStore.store(output, null);
+        char[] password = RemoveUntrustedCertificateRoots.isJks(rawBytes) ? "changeit".toCharArray() : null;
+        java.io.ByteArrayOutputStream serialized = new java.io.ByteArrayOutputStream();
+        keyStore.store(serialized, password);
+        Files.write(file, serialized.toByteArray());
+    }
+
+    private static void writeJksFixture(Path target, Path sourceCacerts) throws Exception {
+        KeyStore source = KeyStore.getInstance("PKCS12");
+        try (InputStream input = Files.newInputStream(sourceCacerts)) {
+            source.load(input, null);
         }
+        KeyStore jks = KeyStore.getInstance("JKS");
+        jks.load(null, "changeit".toCharArray());
+        for (String alias : Collections.list(source.aliases())) {
+            jks.setCertificateEntry(alias, source.getCertificate(alias));
+        }
+        java.io.ByteArrayOutputStream serialized = new java.io.ByteArrayOutputStream();
+        jks.store(serialized, "changeit".toCharArray());
+        Files.write(target, serialized.toByteArray());
+        seedUntrustedRoots(target);
     }
 
     private static Set<String> loadFingerprints(Path file) throws Exception {

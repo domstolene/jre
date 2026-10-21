@@ -1,5 +1,5 @@
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -148,12 +148,13 @@ public class RemoveUntrustedCertificateRoots {
                 throw new IllegalStateException("Invalid SHA-256 fingerprint: " + fingerprint);
             }
         }
-        if (Files.size(cacerts) == 0) {
+        byte[] rawBytes = Files.readAllBytes(cacerts);
+        if (rawBytes.length == 0) {
             throw new IllegalStateException("Empty cacerts trust store: " + cacerts);
         }
 
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
-        try (InputStream input = Files.newInputStream(cacerts)) {
+        try (ByteArrayInputStream input = new ByteArrayInputStream(rawBytes)) {
             keyStore.load(input, null);
         }
 
@@ -175,13 +176,22 @@ public class RemoveUntrustedCertificateRoots {
         }
 
         if (!removed.isEmpty()) {
-            try (OutputStream output = Files.newOutputStream(
-                    cacerts, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
-                keyStore.store(output, null);
-            }
+            char[] storePassword = isJks(rawBytes) ? "changeit".toCharArray() : null;
+            ByteArrayOutputStream serialized = new ByteArrayOutputStream();
+            keyStore.store(serialized, storePassword);
+            Files.write(cacerts, serialized.toByteArray(),
+                    StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
         }
         System.out.println("Removed " + removed.size() + " untrusted root certificate(s) from "
                 + cacerts + ": " + removed);
+    }
+
+    static boolean isJks(byte[] bytes) {
+        return bytes.length >= 4
+                && (bytes[0] & 0xFF) == 0xFE
+                && (bytes[1] & 0xFF) == 0xED
+                && (bytes[2] & 0xFF) == 0xFE
+                && (bytes[3] & 0xFF) == 0xED;
     }
 
     static String fingerprint(X509Certificate certificate) throws Exception {
