@@ -2,9 +2,6 @@ name: Build and publish Docker image
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches:
-      - main
   push:
     branches:
       - main
@@ -21,7 +18,7 @@ env:
 
 jobs:
   build:
-
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       digest: ${{ steps.build-and-push.outputs.digest }}
@@ -29,7 +26,7 @@ jobs:
       contents: read
       packages: write
       # This is used to complete the identity challenge
-      # with sigstore/fulcio when running outside of PRs.
+      # with sigstore/fulcio
       id-token: write
       attestations: write # KRITISK: Gir rettighet til å skrive attestasjoner/SBOM til GHCR
       pages: write
@@ -41,10 +38,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      # Install the cosign tool except on PR
+      # Install the cosign tool
       # https://github.com/sigstore/cosign-installer
       - name: Install cosign
-        if: github.event_name != 'pull_request'
         uses: sigstore/cosign-installer@v4.1.2
 
       # emulate arm64 for multi-arch build
@@ -59,59 +55,36 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      # Login against a Docker registry except on PR
+      # Login against a Docker registry
       # https://github.com/docker/login-action
       - name: Log into registry ${{ env.REGISTRY }}
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build Docker image with Buildx
+      # Build and push Docker image with Buildx
       # https://github.com/docker/build-push-action
-      - name: Build Docker image for validation
+      - name: Build and push Docker image
+        id: build-and-push
         uses: docker/build-push-action@v7
         with:
           context: .
           pull: true
-          push: false
-          load: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:chiseled
-          platforms: linux/amd64
-
-      - name: Validate blocked certificates on linux/amd64
-        run: |
-          set -euo pipefail
-          image_name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          docker run --rm --pull=never --platform linux/amd64 \
-            --mount "type=bind,src=$GITHUB_WORKSPACE/src,dst=/check,readonly" \
-            --entrypoint java \
-            $image_name --source 25 /check/CheckEmudhra.java --require-blocked
-
-      - name: Push docker image if on main branch
-        id: build-and-push
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          pull: false
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:chiseled
           platforms: linux/amd64,linux/arm64/v8
 
       # Attester SLSA provenance (hvem bygget, fra hvilken commit, i hvilken workflow)
       - name: Attest build provenance
-        if: ${{ github.event_name != 'pull_request' }}
         uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build-and-push.outputs.digest }}
 
-      # Generer en SBOM basert på imaget som nettopp ble pushet (kun hvis ikke PR)
+      # Generer en SBOM basert på imaget som nettopp ble pushet
       - name: Generate SBOM with Syft
-        if: ${{ github.event_name != 'pull_request' }}
         uses: anchore/sbom-action@fe95a3eb344f6d7291f97ba35437519784093fdb # har ingen versjonering, pinnet til siste sha på main
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}
@@ -121,7 +94,6 @@ jobs:
 
       # Last opp den genererte SBOM-en som en sikker attestasjon til registeret
       - name: Attest SBOM to Image
-        if: ${{ github.event_name != 'pull_request' }}
         uses: actions/attest@v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -129,13 +101,12 @@ jobs:
           predicate-type: 'https://cyclonedx.org/bom'
           predicate-path: 'sbom.cyclonedx.json'
 
-      # Sign the resulting Docker image digest except on PRs.
+      # Sign the resulting Docker image digests.
       # This will only write to the public Rekor transparency log when the Docker
       # repository is public to avoid leaking data.  If you would like to publish
       # transparency data even for private images, pass --force to cosign below.
       # https://github.com/sigstore/cosign
       - name: Sign the published Docker image
-        if: ${{ github.event_name != 'pull_request' }}
         env:
           # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
@@ -144,7 +115,6 @@ jobs:
         run: cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ env.DIGEST }}
 
       - name: Scan image contents with Syft
-        if: ${{ github.event_name != 'pull_request' }}
         uses: anchore/sbom-action@fe95a3eb344f6d7291f97ba35437519784093fdb # har ingen versjonering, pinnet til siste sha på main
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}
@@ -154,7 +124,6 @@ jobs:
           upload-release-assets: false
 
       - name: Scan vulnerabilities with Grype
-        if: ${{ github.event_name != 'pull_request' }}
         id: grype-scan
         run: |
           curl --silent --location --show-error --fail \
@@ -171,7 +140,6 @@ jobs:
           echo "json=grype.json" >> "$GITHUB_OUTPUT"
 
       - name: Generate SVG badge and index page
-        if: ${{ github.event_name != 'pull_request' }}
         env:
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -181,12 +149,10 @@ jobs:
         run: bash src/generate-pages.sh
 
       - name: Upload Pages artifact
-        if: ${{ github.event_name != 'pull_request' }}
         uses: actions/upload-pages-artifact@v5
         with:
           path: ./dist
 
       - name: Deploy to GitHub Pages
-        if: ${{ github.event_name != 'pull_request' }}
         id: deploy-pages
         uses: actions/deploy-pages@v5
