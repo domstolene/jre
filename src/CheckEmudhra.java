@@ -5,16 +5,20 @@ import java.security.KeyStore;
 import java.security.MessageDigest;
 import java.security.cert.CertPathBuilderException;
 import java.security.cert.CertPathValidatorException;
+import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.HexFormat;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLHandshakeException;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
-import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509ExtendedTrustManager;
 import javax.net.ssl.X509TrustManager;
 
 public class CheckEmudhra {
@@ -42,7 +46,8 @@ public class CheckEmudhra {
                 + System.getProperty("com.sun.net.ssl.checkRevocation", "false"));
         System.out.println("ocsp.enable: " + java.security.Security.getProperty("ocsp.enable"));
 
-        boolean rootsRemoved = !hasUntrustedRootInTrustStore();
+        X509ExtendedTrustManager defaultTrustManager = defaultTrustManager();
+        boolean rootsRemoved = !hasUntrustedRootInTrustStore(defaultTrustManager);
         int trusted = 0;
         int rejected = 0;
         int unknown = 0;
@@ -51,24 +56,21 @@ public class CheckEmudhra {
                 for (String issuer : new String[] {"", "-aaa"}) {
                     String host = category + "-" + region + issuer
                             + "-emudhra.we-have-a-problem.com";
+                    AtomicReference<X509Certificate[]> presentedChain = new AtomicReference<>();
+                    SSLContext sslContext = SSLContext.getInstance("TLS");
+                    sslContext.init(null, new TrustManager[] {
+                            capturingTrustManager(defaultTrustManager, presentedChain)
+                    }, null);
                     try (Socket transport = new Socket()) {
                         transport.connect(new InetSocketAddress(host, 443), 10_000);
-                        try (SSLSocket socket = (SSLSocket) ((SSLSocketFactory) SSLSocketFactory.getDefault())
+                        try (SSLSocket socket = (SSLSocket) sslContext.getSocketFactory()
                                 .createSocket(transport, host, 443, true)) {
                             socket.setSoTimeout(10_000);
                             SSLParameters parameters = socket.getSSLParameters();
                             parameters.setEndpointIdentificationAlgorithm("HTTPS");
                             socket.setSSLParameters(parameters);
                             socket.startHandshake();
-                            boolean affected = false;
-                            for (var certificate : socket.getSession().getPeerCertificates()) {
-                                X509Certificate x509 = (X509Certificate) certificate;
-                                String keyHash = HexFormat.of().withUpperCase().formatHex(
-                                        MessageDigest.getInstance("SHA-256")
-                                                .digest(x509.getPublicKey().getEncoded()));
-                                affected |= AFFECTED_TLS_KEYS.contains(keyHash);
-                            }
-                            if (affected) {
+                            if (hasAffectedKey(socket.getSession().getPeerCertificates())) {
                                 trusted++;
                                 System.out.println("TRUSTED " + host + " - compromised CA key accepted");
                             } else {
@@ -86,7 +88,8 @@ public class CheckEmudhra {
                             + " TLS CA - " + region.toUpperCase(java.util.Locale.ROOT)
                             + ("g3b".equals(region) ? ", O=eMudhra BV, C=NL" : ", O=eMudhra Inc, C=US");
                         if (certificateFailure && (!requireBlocked
-                            || (rootsRemoved && isBlockedCertificate(exception, expectedSubject)))) {
+                            || (rootsRemoved && isBlockedCertificate(
+                                    exception, expectedSubject, presentedChain.get())))) {
                             rejected++;
                             System.out.println("REJECTED " + host + " - " + exception.getMessage());
                         } else {
@@ -108,25 +111,104 @@ public class CheckEmudhra {
         System.exit(trusted > 0 ? 1 : unknown > 0 ? 2 : 0);
     }
 
-    static boolean hasUntrustedRootInTrustStore() throws Exception {
+    static X509ExtendedTrustManager defaultTrustManager() throws Exception {
         TrustManagerFactory factory = TrustManagerFactory.getInstance(
                 TrustManagerFactory.getDefaultAlgorithm());
         factory.init((KeyStore) null);
         for (TrustManager manager : factory.getTrustManagers()) {
-            if (manager instanceof X509TrustManager x509Manager) {
-                for (X509Certificate issuer : x509Manager.getAcceptedIssuers()) {
-                    String sha256 = HexFormat.of().withUpperCase().formatHex(
-                            MessageDigest.getInstance("SHA-256").digest(issuer.getEncoded()));
-                    if (UNTRUSTED_ROOTS.contains(sha256)) {
-                        return true;
-                    }
+            if (manager instanceof X509ExtendedTrustManager extended) {
+                return extended;
+            }
+        }
+        throw new IllegalStateException("No X509ExtendedTrustManager found");
+    }
+
+    static X509ExtendedTrustManager capturingTrustManager(
+            X509ExtendedTrustManager delegate, AtomicReference<X509Certificate[]> captured) {
+        return new X509ExtendedTrustManager() {
+            @Override
+            public void checkClientTrusted(X509Certificate[] chain, String authType, Socket socket)
+                    throws CertificateException {
+                delegate.checkClientTrusted(chain, authType, socket);
+            }
+
+            @Override
+            public void checkServerTrusted(X509Certificate[] chain, String authType, Socket socket)
+                    throws CertificateException {
+                captured.set(chain);
+                delegate.checkServerTrusted(chain, authType, socket);
+            }
+
+            @Override
+            public void checkClientTrusted(X509Certificate[] chain, String authType, SSLEngine engine)
+                    throws CertificateException {
+                delegate.checkClientTrusted(chain, authType, engine);
+            }
+
+            @Override
+            public void checkServerTrusted(X509Certificate[] chain, String authType, SSLEngine engine)
+                    throws CertificateException {
+                captured.set(chain);
+                delegate.checkServerTrusted(chain, authType, engine);
+            }
+
+            @Override
+            public void checkClientTrusted(X509Certificate[] chain, String authType)
+                    throws CertificateException {
+                delegate.checkClientTrusted(chain, authType);
+            }
+
+            @Override
+            public void checkServerTrusted(X509Certificate[] chain, String authType)
+                    throws CertificateException {
+                captured.set(chain);
+                delegate.checkServerTrusted(chain, authType);
+            }
+
+            @Override
+            public X509Certificate[] getAcceptedIssuers() {
+                return delegate.getAcceptedIssuers();
+            }
+        };
+    }
+
+    static boolean hasUntrustedRootInTrustStore() throws Exception {
+        return hasUntrustedRootInTrustStore(defaultTrustManager());
+    }
+
+    static boolean hasUntrustedRootInTrustStore(X509TrustManager trustManager) throws Exception {
+        for (X509Certificate issuer : trustManager.getAcceptedIssuers()) {
+            String sha256 = HexFormat.of().withUpperCase().formatHex(
+                    MessageDigest.getInstance("SHA-256").digest(issuer.getEncoded()));
+            if (UNTRUSTED_ROOTS.contains(sha256)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static boolean hasAffectedKey(Certificate[] chain) throws Exception {
+        if (chain == null) {
+            return false;
+        }
+        for (Certificate certificate : chain) {
+            if (certificate instanceof X509Certificate x509) {
+                String keyHash = HexFormat.of().withUpperCase().formatHex(
+                        MessageDigest.getInstance("SHA-256")
+                                .digest(x509.getPublicKey().getEncoded()));
+                if (AFFECTED_TLS_KEYS.contains(keyHash)) {
+                    return true;
                 }
             }
         }
         return false;
     }
 
-    static boolean isBlockedCertificate(Throwable exception, String expectedSubject) {
+    static boolean isBlockedCertificate(
+            Throwable exception, String expectedSubject, Certificate[] chain) throws Exception {
+        if (!hasAffectedKey(chain)) {
+            return false;
+        }
         for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
             if (cause instanceof CertPathBuilderException
                     && "unable to find valid certification path to requested target".equals(cause.getMessage())) {
