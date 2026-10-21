@@ -66,15 +66,35 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build and push Docker image with Buildx (don't push on PR)
+      # Build Docker image with Buildx
       # https://github.com/docker/build-push-action
-      - name: Build and push Docker image
-        id: build-and-push
+      - name: Build Docker image for validation
         uses: docker/build-push-action@v7
         with:
           context: .
           pull: true
-          push: ${{ github.event_name != 'pull_request' }}
+          push: false
+          load: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:chiseled
+          platforms: linux/amd64
+
+      - name: Validate blocked certificates on linux/amd64
+        run: |
+          set -euo pipefail
+          image_name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker run --rm --pull=never --platform linux/amd64 \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/src,dst=/check,readonly" \
+            --entrypoint java \
+            $image_name --source 25 /check/CheckEmudhra.java --require-blocked
+
+      - name: Push docker image if on main branch
+        id: build-and-push
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          pull: false
+          push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:chiseled
           platforms: linux/amd64,linux/arm64/v8
 
