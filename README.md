@@ -99,12 +99,11 @@ en bruke en instruks som denne:
 
 > Lag et program i java 25 som finner alle program på PATH i linux. Det skal liste ut hele stien til programmet, slik som /bin/sh, filrettigheter og eier. Bruk enkel main-metode, uten klasse. Skriv til onpath.java
 
-Kompiler programmet og kjør det i container:
-```shell
-javac onpath.java
-docker run -it -v $(pwd):/app ghcr.io/domstolene/jre onpath
+Kjør Java-filen direkte i containeren:
+```fish
+docker run --rm --mount "type=bind,src=$PWD,dst=/check,readonly" \
+  ghcr.io/domstolene/jre:chiseled --source 25 /check/onpath.java
 ```
-
 
 ## Sikkerhet
 Chiseled er et verktøy som [stripper Ubuntu helt ned](https://hub.docker.com/r/ubuntu/jre), slik at en kun har Java for å kjøre applikasjoner og ikke noe annet. Ingen pakker, ingen shell, ingenting annet enn det som trengs. Det medfører at vi ikke trenger bekymre oss for sårbarheter og angrep, fordi de oftes gjøres via flere steg:
@@ -115,10 +114,35 @@ Chiseled er et verktøy som [stripper Ubuntu helt ned](https://hub.docker.com/r/
 
 Når vi har fjernet steg 2, alle verktøy som finnes i image, så er det svært vanskelig å angripe en applikasjon.
 
-Legg merke til at ubuntu/jre også inneholder kompilatoren `javac` og mange verktøy for feilsøking, slik som `jcmd`. De fjerner vi med [RemoveTools.java](src/RemoveTools.java), slik at en angriper ikke kan lage programmer med ren java-kode, kompilere den, så kjøre koden. Eller inspisere og endre på java-prosessen runtime.
+Legg merke til at ubuntu/jre også inneholder kompilatoren `javac` og mange verktøy for feilsøking, slik som `jcmd`. De fjerner vi med [RemoveTools.java](src/RemoveTools.java), slik at en angriper ikke kan bruke de.
 
-Se [seksjonen om feilsøking](#feilsøking) for hvordan en bruker verktøy som `jcmd` for å printe stacken.
+Tross at vi fjerner verktøyene, kan en fortsatt bruke Java-kompilatoren via `java --source 25 et-program.java`. Kompilatormodulen beholdes, så fjerning av `javac` hindrer ikke kompilering og kjøring av Java-kildekode. Dette er uavhengig av JVM-ens JIT-kompilering, som optimaliserer kode mens programmet kjører.
 
+Dersom en trenger cli-verktøyene, se [seksjonen om feilsøking](#feilsøking) for hvordan en bruker verktøy som `jcmd` for å printe stacken.
+
+### Fjerning av rotsertifikater vi ikke stoler på
+[RemoveUntrustedCertificateRoots.java](src/RemoveUntrustedCertificateRoots.java) kjøres direkte med `java --source 25` under bygging for å fjerne rotsertifikater vi ikke stoler på fra `$JAVA_HOME/lib/security/cacerts`.
+Dette beskytter mot de kompromitterte mellomsertifikatene fra [eMudhra-varslet](https://emudhra.we-have-a-problem.com/) ved å fjerne rotsertifikatene `emSign ECC Root CA - G3` (`emsigneccrootcag3 [jdk]`) og `AAA Certificate Services` (`comodoaaaca [jdk]`) fra `cacerts` (se Javadoc i [RemoveUntrustedCertificateRoots.java](src/RemoveUntrustedCertificateRoots.java) for begrunnelse og hvilke tjenester som potensielt påvirkes).
+[Bygget i PR](.github/workflows/pr.yaml) feiler hvis rotsertifikatene fortsatt er betrodd via [CheckEmudhra.java](src/CheckEmudhra.java).
+
+Kjør samme kontroll som i PR-workflowen lokalt:
+
+```fish
+docker run --rm \
+  --mount "type=bind,src=$PWD/src,dst=/check,readonly" \
+  ghcr.io/domstolene/jre --source 25 /check/CheckEmudhra.java --require-blocked
+```
+
+Forvent `TRUSTED=0 REJECTED=12 UNKNOWN=0`. Med `--require-blocked` kontrolleres det at de berørte rotsertifikatene er fjernet fra `cacerts` og at Java avviser sertifikatkjeden fordi det ikke finnes noen gyldig tillitskjede (`unable to find valid certification path to requested target`).
+Nettverksfeil, utløpte sertifikater og annen avvisning gir ikke bestått kontroll.
+Testen trenger DNS og utgående TCP/443 til testvertene. Den tester ikke JAR-signaturer
+eller om tidligere angrep har funnet sted. Eksisterende tjenester må bygges på nytt
+og rulles ut med det oppdaterte imaget.
+
+## Workflows
+[PR-workflowen](.github/workflows/pr.yaml) kjører på PR-er mot `main` og kan startes manuelt. Den bygger imaget for `linux/amd64` og kontrollerer at Java starter og sjekker at vi ikke stoler på utrygge sertifikater. Ingen publisering, signering, attestering, SBOM, scanning eller GitHub Pages.
+
+[Publiseringsworkflowen](.github/workflows/build-and-publish.yml) kjører ved push til `main`, daglig og manuelt. Den bygger imaget for begge arkitekturer, publiserer, attesterer og signerer det, og kjører Syft og Grype før rapporten publiseres til GitHub Pages. Sertifikatkontrollen kjøres i PR-workflowen, ikke i publiseringsworkflowen.
 
 ## Sikkerhetsvarsler og scanning
 Scanne med Red Hat Advanced Cluster Security:

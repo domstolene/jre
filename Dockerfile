@@ -1,30 +1,16 @@
-### FJERNE VERKTØY ###
-# Fjern utviklerverktøy fra chiseled JRE, vi trenger kun java som entrypoint, ikke noe annet
-FROM eclipse-temurin:25-jdk-alpine AS compiler
-
-# Kopierer inn RemoveTools.java og lager /app
-# med skriverettigheter for gruppen 1000
-WORKDIR /build/app
-ADD src/RemoveTools.java RemoveTools.java
-RUN javac RemoveTools.java
-
-# /app må ligge i /build for at vi skal kunne kopiere
-# mappen _med_ rettighetene
-RUN chown -R 0:0 /build/app && \
-    chmod -R 775 /build/app
-
-
 ### BYGGE IMAGE ###
 # Minimalistisk Ubuntu med kun java (når vi har kjørt RemoveTools)
 FROM docker.io/ubuntu/jre:25-26.04_edge AS chiseled
 
 
-### FJERNE VERKTØY ###
-# Hent RemoveTools.class og /app fra compiler stage
-COPY --from=compiler --chown=0:0 /build/ /
+### VERKTØY FOR TILPASNING AV IMAGE ###
+COPY --chown=0:0 src/RemoveUntrustedCertificateRoots.java src/RemoveTools.java /app/
+
+# Fjerner rotsertifikater vi ikke stoler på
+RUN ["java", "--source", "25", "/app/RemoveUntrustedCertificateRoots.java"]
 
 # Kjør RemoveTools for å fjerne VERKTØY fra chiseled JRE
-RUN ["java", "-cp", "/app", "RemoveTools"]
+RUN ["java", "--source", "25", "/app/RemoveTools.java"]
 
 
 ### ARGUMENTER ###
