@@ -7,7 +7,9 @@
 #   IMAGE      – f.eks. ghcr.io/domstolene/jre
 #   OUTPUT_DIR – f.eks. ./dist (default: ./dist)
 #
-# BASE_IMAGE, JAVA_VERSION og UBUNTU_VERSION leses automatisk fra Dockerfile.
+# BASE_IMAGE og UBUNTU_VERSION leses automatisk fra Dockerfile.
+# JAVA_VERSION leses fra imaget, og DA_OTEL_AGENT_VERSION fra
+# /da-otel-agent/version-info-<versjon> i imaget, uten shell i containeren.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -26,6 +28,18 @@ mkdir -p "$OUTPUT_DIR"
 IMAGE=${IMAGE:-"ghcr.io/domstolene/jre"}
 DIGEST=${DIGEST:?"DIGEST environment variable is required, example: DIGEST=sha256:502a7e0e996bdfe2ff6fdc6204350f016af1ca04df69ae315dc8fdd310c502aa $0"}
 JAVA_VERSION=$(docker run "$IMAGE@$DIGEST" -version 2>&1 | grep -v JAVA_TOOL_OPTIONS)
+
+VERSION_CONTAINER=$(docker create "$IMAGE@$DIGEST")
+trap 'docker rm "$VERSION_CONTAINER" > /dev/null' EXIT
+DA_OTEL_AGENT_VERSION=$(docker cp "${VERSION_CONTAINER}:/da-otel-agent/." - \
+  | tar -tf - \
+  | awk -F/ '$NF ~ /^version-info-/ {sub(/^version-info-/, "", $NF); print $NF}')
+if [[ ! "$DA_OTEL_AGENT_VERSION" =~ ^[[:alnum:]][[:alnum:].+_-]*$ ]]; then
+  echo "Forventet én versjonsfil /da-otel-agent/version-info-<versjon> i $IMAGE@$DIGEST, fant: '$DA_OTEL_AGENT_VERSION'" >&2
+  exit 1
+fi
+docker rm "$VERSION_CONTAINER" > /dev/null
+trap - EXIT
 
 FULL_REF="${IMAGE}@${DIGEST}"
 BUILD_TIME=$(date -u '+%Y-%m-%dT%H:%M UTC')
@@ -246,6 +260,10 @@ cat > "${OUTPUT_DIR}/index.html" << EOF
       <tr>
         <td>Java-versjon</td>
         <td><code>${JAVA_VERSION}</code></td>
+      </tr>
+      <tr>
+        <td>da-otel-agent-versjon</td>
+        <td><code>${DA_OTEL_AGENT_VERSION}</code></td>
       </tr>
       <tr>
         <td>Ubuntu-versjon</td>
