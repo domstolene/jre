@@ -52,6 +52,7 @@ ARG DA_OTEL_AGENT_VERSION=1.8.3
 # for å opprette mappen med 755-rettigheter, kan ikke bruke mkdir da vi ikke har shell i dette imaget
 WORKDIR /da-otel-agent
 ADD --chmod=644 --chown=0:1000 https://github.com/domstolene/da-otel-agent/releases/download/${DA_OTEL_AGENT_VERSION}/da-opentelemetry-javaagent.jar da-otel-agent.jar
+ADD --chmod=644 --chown=0:1000 src/da-otel-agent/version-info version-info-${DA_OTEL_AGENT_VERSION}
 ADD --chmod=644 --chown=0:1000 src/da-otel-agent/da-otel-agent.yaml da-otel-agent.yaml
 
 # skru av sending av metrikker og logger, som ikke støttes i vårt OpenTelemetry-oppsett per nå
