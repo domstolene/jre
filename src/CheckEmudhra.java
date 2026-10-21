@@ -61,44 +61,57 @@ public class CheckEmudhra {
                     sslContext.init(null, new TrustManager[] {
                             capturingTrustManager(defaultTrustManager, presentedChain)
                     }, null);
-                    try (Socket transport = new Socket()) {
-                        transport.connect(new InetSocketAddress(host, 443), 10_000);
-                        try (SSLSocket socket = (SSLSocket) sslContext.getSocketFactory()
-                                .createSocket(transport, host, 443, true)) {
-                            socket.setSoTimeout(10_000);
-                            SSLParameters parameters = socket.getSSLParameters();
-                            parameters.setEndpointIdentificationAlgorithm("HTTPS");
-                            socket.setSSLParameters(parameters);
-                            socket.startHandshake();
-                            if (hasAffectedKey(socket.getSession().getPeerCertificates())) {
-                                trusted++;
-                                System.out.println("TRUSTED " + host + " - compromised CA key accepted");
+                    for (int attempt = 1; attempt <= 5; attempt++) {
+                        presentedChain.set(null);
+                        try (Socket transport = new Socket()) {
+                            transport.connect(new InetSocketAddress(host, 443), 5_000);
+                            try (SSLSocket socket = (SSLSocket) sslContext.getSocketFactory()
+                                    .createSocket(transport, host, 443, true)) {
+                                socket.setSoTimeout(5_000);
+                                SSLParameters parameters = socket.getSSLParameters();
+                                parameters.setEndpointIdentificationAlgorithm("HTTPS");
+                                socket.setSSLParameters(parameters);
+                                socket.startHandshake();
+                                if (hasAffectedKey(socket.getSession().getPeerCertificates())) {
+                                    trusted++;
+                                    System.out.println("TRUSTED " + host + " - compromised CA key accepted");
+                                } else {
+                                    unknown++;
+                                    System.out.println("UNKNOWN " + host
+                                            + " - no affected key in peer chain; possible TLS interception");
+                                }
+                                break;
+                            }
+                        } catch (SSLHandshakeException exception) {
+                            boolean certificateFailure = false;
+                            for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+                                certificateFailure |= cause instanceof CertificateException;
+                            }
+                            if (!certificateFailure && attempt < 5) {
+                                Thread.sleep(1_000L * attempt);
+                                continue;
+                            }
+                            String expectedSubject = "CN=EM " + category.toUpperCase(java.util.Locale.ROOT)
+                                + " TLS CA - " + region.toUpperCase(java.util.Locale.ROOT)
+                                + ("g3b".equals(region) ? ", O=eMudhra BV, C=NL" : ", O=eMudhra Inc, C=US");
+                            if (certificateFailure && (!requireBlocked
+                                || (rootsRemoved && isBlockedCertificate(
+                                        exception, expectedSubject, presentedChain.get())))) {
+                                rejected++;
+                                System.out.println("REJECTED " + host + " - " + exception.getMessage());
                             } else {
                                 unknown++;
-                                System.out.println("UNKNOWN " + host
-                                        + " - no affected key in peer chain; possible TLS interception");
+                                System.out.println("UNKNOWN " + host + " - " + exception);
                             }
-                        }
-                    } catch (SSLHandshakeException exception) {
-                        boolean certificateFailure = false;
-                        for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
-                            certificateFailure |= cause instanceof CertificateException;
-                        }
-                        String expectedSubject = "CN=EM " + category.toUpperCase(java.util.Locale.ROOT)
-                            + " TLS CA - " + region.toUpperCase(java.util.Locale.ROOT)
-                            + ("g3b".equals(region) ? ", O=eMudhra BV, C=NL" : ", O=eMudhra Inc, C=US");
-                        if (certificateFailure && (!requireBlocked
-                            || (rootsRemoved && isBlockedCertificate(
-                                    exception, expectedSubject, presentedChain.get())))) {
-                            rejected++;
-                            System.out.println("REJECTED " + host + " - " + exception.getMessage());
-                        } else {
+                            break;
+                        } catch (IOException exception) {
+                            if (attempt < 5) {
+                                Thread.sleep(1_000L * attempt);
+                                continue;
+                            }
                             unknown++;
                             System.out.println("UNKNOWN " + host + " - " + exception);
                         }
-                    } catch (IOException exception) {
-                        unknown++;
-                        System.out.println("UNKNOWN " + host + " - " + exception);
                     }
                 }
             }
