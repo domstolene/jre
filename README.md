@@ -23,6 +23,11 @@ ADD --chmod=644 --chown=0:1000 build/libs/*.jar application.jar
 OBS: Ikke overstyr `WORKDIR`, det er satt til `/app` og application.jar havner da i `/app/application.jar`.
 PS: Tross dette vil Spring Boot finne konfigurasjon i `/config`, `/app/config` og `/deployments/config`. Se `SPRING_CONFIG_ADDITIONAL_LOCATION` i [Dockerfile](Dockerfile) for detaljer.
 
+### Standard tidssone
+
+Imaget setter `TZ=Europe/Oslo`, slik at JVM-en bruker norsk tid med automatisk overgang mellom vintertid og sommertid. Tidssonen kan overstyres ved oppstart, for eksempel med `docker run --env TZ=UTC ...`, eller for JVM-en med `-Duser.timezone=UTC`.
+
+### I pipeline
 
 I pipeline, sørg for å alltid hente siste versjon av base image med `pull: true`:
 
