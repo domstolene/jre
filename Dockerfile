@@ -55,6 +55,8 @@ ENV OTEL_TRACES_SAMPLER=always_off
 WORKDIR /app
 USER 1000:0
 ENV SPRING_CONFIG_ADDITIONAL_LOCATION="optional:file:/config/,optional:file:/app/config/,optional:file:/deployments/config/"
+# Norsk tidssone som standard, kan overstyres med TZ ved oppstart
+ENV TZ=Europe/Oslo
 # sørg for at stdout skriver med UTF-8
 ENV JAVA_TOOL_OPTIONS="-Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8"
 
