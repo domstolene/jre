@@ -54,11 +54,11 @@ export pod=$(kubectl get pods --namespace $namespace -o name | grep $app | head 
 kubectl debug --namespace $namespace $pod \
   --target=$app \
   --image=docker.io/eclipse-temurin:25-jdk \
-  --tty --stdin \
+  --tty --stdin --profile=restricted \
   -- bash
 ```
 
-MERK: `oc debug` starter en debug-**pod**, så det fungerer ikke til å inspisere en kjørende applikasjon.
+MERKNADER: `oc debug` starter en debug-**pod**, så det fungerer ikke til å inspisere en kjørende applikasjon. `--profile=restricted` dropper Linux-rettigheten `SYS_PTRACE`, som utviklere ikke har tilgang på.
 
 Inni debug-containeren kan du nå kjøre kommandoer og sjekke ting:
 ```shell
@@ -81,7 +81,7 @@ Shell og ønsket inspeksjon kan også kombineres som dette:
 # henter miljøvariabelen DB_PASSWORD
 kubectl debug --namespace $namespace $pod \
   --target=$app \
-  --quiet --stdin --tty \
+  --quiet --stdin --tty --profile=restricted \
   --image=eclipse-temurin:25-jdk \
   -- sh -c "cat /proc/1/environ | tr '\\0' '\\n'" \
   | grep DB_PASSWORD
@@ -92,7 +92,7 @@ Dersom du trenger `curl`, kan du bruke [Red Hat Universal Base Image](https://ca
 kubectl debug --namespace $namespace $pod \
   --target=$app \
   --image=ubi10 \
-  --tty --stdin \
+  --tty --stdin --profile=restricted \
   -- bash
 ```
 
