@@ -34,6 +34,12 @@ jobs:
       - name: Validate Java runtime
         run: docker run --rm --pull=never --platform linux/amd64 jre:pr --version
 
+      - name: Validate UTF-8 file paths
+        run: |
+          docker run --rm --pull=never --platform linux/amd64 \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/src/test,dst=/check,readonly" \
+            jre:pr --source 25 /check/Utf8PathsTest.java
+
       - name: Validate blocked certificates
         run: |
           set -euo pipefail
@@ -41,4 +47,3 @@ jobs:
           docker run --rm --pull=never --platform linux/amd64 \
             --mount "type=bind,src=$GITHUB_WORKSPACE/src,dst=/check,readonly" \
             $image_name --source 25 /check/CheckEmudhra.java --require-blocked
-

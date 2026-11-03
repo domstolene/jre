@@ -27,6 +27,21 @@ PS: Tross dette vil Spring Boot finne konfigurasjon i `/config`, `/app/config` o
 
 Imaget setter `TZ=Europe/Oslo`, slik at JVM-en bruker norsk tid med automatisk overgang mellom vintertid og sommertid. Tidssonen kan overstyres ved oppstart, for eksempel med `docker run --env TZ=UTC ...`, eller for JVM-en med `-Duser.timezone=UTC`.
 
+### UTF-8 og filnavn
+
+Imaget inkluderer `C.utf8`-locale-data fra samme Ubuntu-versjon som JRE-imaget og setter `LANG=C.UTF-8` og `LC_ALL=C.UTF-8`. Dette sørger for at Java bruker UTF-8 også for filstier, slik at filnavn med blant annet `æ`, `ø` og `å` fungerer. `-Dfile.encoding=UTF-8` alene styrer ikke tegnkodingen for filstier.
+
+PR-workflowen kontrollerer dette med [Utf8PathsTest.java](src/test/Utf8PathsTest.java). Kjør samme test lokalt mot et nybygget image:
+
+```shell
+docker build -t jre:local .
+docker run --rm \
+  --mount "type=bind,src=$PWD/src/test,dst=/check,readonly" \
+  jre:local --source 25 /check/Utf8PathsTest.java
+```
+
+Eksisterende tjenester må bygges på nytt med det oppdaterte base-imaget og rulles ut for å få rettingen.
+
 ### I pipeline
 
 I pipeline, sørg for å alltid hente siste versjon av base image med `pull: true`:
@@ -145,7 +160,7 @@ eller om tidligere angrep har funnet sted. Eksisterende tjenester må bygges på
 og rulles ut med det oppdaterte imaget.
 
 ## Workflows
-[PR-workflowen](.github/workflows/pr.yaml) kjører på PR-er mot `main` og kan startes manuelt. Den bygger imaget for `linux/amd64` og kontrollerer at Java starter og sjekker at vi ikke stoler på utrygge sertifikater. Ingen publisering, signering, attestering, SBOM, scanning eller GitHub Pages.
+[PR-workflowen](.github/workflows/pr.yaml) kjører på PR-er mot `main` og kan startes manuelt. Den bygger imaget for `linux/amd64` og kontrollerer at Java starter, at UTF-8-filnavn fungerer og at vi ikke stoler på utrygge sertifikater. Ingen publisering, signering, attestering, SBOM, scanning eller GitHub Pages.
 
 [Publiseringsworkflowen](.github/workflows/build-and-publish.yml) kjører ved push til `main`, daglig og manuelt. Den bygger imaget for begge arkitekturer, publiserer, attesterer og signerer det, og kjører Syft og Grype før rapporten publiseres til GitHub Pages. Sertifikatkontrollen kjøres i PR-workflowen, ikke i publiseringsworkflowen.
 
