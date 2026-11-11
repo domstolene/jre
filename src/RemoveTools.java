@@ -7,7 +7,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-void main() {
+void main() throws java.io.IOException {
+    Files.setPosixFilePermissions(Path.of("/app"),
+            java.nio.file.attribute.PosixFilePermissions.fromString("rwxrwxr-x"));
+
     String[] toolsToRemove = {
         // Oppstart
         "pebble",       // Pebble er et verktøy for å starte applikasjoner, som vi ikke trenger
