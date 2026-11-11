@@ -140,10 +140,9 @@ Tross at vi fjerner verktøyene, kan en fortsatt bruke Java-kompilatoren via `ja
 
 Dersom en trenger cli-verktøyene, se [seksjonen om feilsøking](#feilsøking) for hvordan en bruker verktøy som `jcmd` for å printe stacken.
 
-### Fjerning av rotsertifikater vi ikke stoler på
-[RemoveUntrustedCertificateRoots.java](src/RemoveUntrustedCertificateRoots.java) kjøres direkte med `java --source 25` under bygging for å fjerne rotsertifikater vi ikke stoler på fra `$JAVA_HOME/lib/security/cacerts`.
-Dette beskytter mot de kompromitterte mellomsertifikatene fra [eMudhra-varslet](https://emudhra.we-have-a-problem.com/) ved å fjerne rotsertifikatene `emSign ECC Root CA - G3` (`emsigneccrootcag3 [jdk]`) og `AAA Certificate Services` (`comodoaaaca [jdk]`) fra `cacerts` (se Javadoc i [RemoveUntrustedCertificateRoots.java](src/RemoveUntrustedCertificateRoots.java) for begrunnelse og hvilke tjenester som potensielt påvirkes).
-[Bygget i PR](.github/workflows/pr.yaml) feiler hvis rotsertifikatene fortsatt er betrodd via [CheckEmudhra.java](src/CheckEmudhra.java).
+### Kontroll av utrygge sertifikater
+Base-imaget inneholder ikke lenger de berørte rotsertifikatene fra [eMudhra-varslet](https://emudhra.we-have-a-problem.com/).
+[Bygget i PR](.github/workflows/pr.yaml) bruker fortsatt [CheckEmudhra.java](src/CheckEmudhra.java) og feiler hvis de berørte røttene blir betrodd igjen.
 
 Kjør samme kontroll som i PR-workflowen lokalt:
 

@@ -6,15 +6,15 @@ FROM docker.io/ubuntu:26.04 AS locale
 # Minimalistisk Ubuntu med kun java (når vi har kjørt RemoveTools)
 FROM docker.io/ubuntu/jre:25-26.04_edge AS chiseled
 
+# Tilpasning av systemfiler krever root; bytt til uprivilegert bruker ved oppstart.
+USER 0:0
+
 COPY --from=locale /usr/lib/locale/C.utf8 /usr/lib/locale/C.utf8
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 
 ### VERKTØY FOR TILPASNING AV IMAGE ###
-COPY --chown=0:0 src/RemoveUntrustedCertificateRoots.java src/RemoveTools.java /app/
-
-# Fjerner rotsertifikater vi ikke stoler på
-RUN ["java", "--source", "25", "/app/RemoveUntrustedCertificateRoots.java"]
+COPY --chown=0:0 src/RemoveTools.java /app/
 
 # Kjør RemoveTools for å fjerne VERKTØY fra chiseled JRE
 RUN ["java", "--source", "25", "/app/RemoveTools.java"]
