@@ -67,9 +67,12 @@ ENV TZ=Europe/Oslo
 # sørg for at stdout skriver med UTF-8
 ENV JAVA_TOOL_OPTIONS="-Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8"
 
+# -XX:-UseBASE64Intrinsics - Java4Shell, avx512-optimalisering for base64-dekoding, ikke noe vi trenger, så skrur det av, tross at vi ikke er sårbare
+
 ENTRYPOINT ["java"]
 CMD ["-javaagent:/da-otel-agent/da-otel-agent.jar", \
     "-Dotel.configuration.service.file=/da-otel-agent/da-otel-agent.yaml", \
+    "-XX:-UseBASE64Intrinsics", \
     "-XX:InitialRAMPercentage=40.0", \
     "-XX:MaxRAMPercentage=75.0", \
     "-jar", \
